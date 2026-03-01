@@ -30,6 +30,7 @@ import {
   installClaudeCode,
   runReview,
   buildStructuredPrompt,
+  buildPRSummaryPrompt,
   parseFileReviews,
   validateFileReviews,
   formatFileReviewAsMarkdown,
@@ -430,8 +431,19 @@ async function runPerFileReview(
     }
   }
 
-  // 6. Postar resumo global
-  const summaryComment = buildSummaryComment(allReviews, model, prompt, hasSpec, batches.length);
+  // 6. Gerar sumário executivo da PR
+  console.log('\n📋 Gerando sumário executivo da PR...');
+  let prSummaryText = '';
+  try {
+    const summaryPrompt = buildPRSummaryPrompt(allReviews, specificationContext || undefined);
+    prSummaryText = runReview(summaryPrompt, prompt.prSummarySystem, '', options);
+    console.log('✅ Sumário gerado com sucesso.');
+  } catch (err: any) {
+    tl.warning(`Aviso: Falha ao gerar sumário da PR: ${err.message}`);
+  }
+
+  // 7. Postar resumo global (inclui sumário executivo)
+  const summaryComment = buildSummaryComment(allReviews, model, prompt, hasSpec, batches.length, prSummaryText);
   await postPRComment(ctx, summaryComment);
 
   // 7. Adicionar label
@@ -511,7 +523,8 @@ function buildSummaryComment(
   model: string,
   prompt: ReviewPrompt,
   hasSpecification: boolean = false,
-  batchCount: number = 1
+  batchCount: number = 1,
+  prSummary: string = ''
 ): string {
   let critical = 0;
   let important = 0;
@@ -537,6 +550,12 @@ function buildSummaryComment(
 
   let md = REVIEW_MARKER + '\n';
   md += prompt.reviewHeader;
+
+  // Sumário executivo (se disponível)
+  if (prSummary) {
+    md += prSummary + '\n\n---\n\n';
+  }
+
   md += `**${reviews.length}** arquivo(s) analisado(s), **${filesWithIssues}** com feedback.`;
   if (batchCount > 1) {
     md += ` *(${batchCount} lotes de análise)*`;

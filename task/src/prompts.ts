@@ -6,6 +6,7 @@ export interface ReviewPrompt {
   system: string;
   perFileSystem: string;
   perFileSystemWithSpec: string;
+  prSummarySystem: string;
   noChanges: string;
   diffTooLarge: string;
   reviewHeader: string;
@@ -112,6 +113,30 @@ Uma seção "ESPECIFICAÇÃO (Work Items)" será fornecida abaixo com título, d
 4. Preencher "specificationNotes" com uma explicação concreta: o que foi atendido, o que ficou faltando, ou quais critérios de aceite não foram cobertos
 5. Se meetsSpecification for false, adicionar obrigatoriamente um issue com severity "important" descrevendo especificamente qual requisito ou critério de aceite não foi implementado
 6. Arquivos que não se relacionam com a especificação (ex: configs, docs) devem ter meetsSpecification como true e specificationNotes vazio`,
+
+    prSummarySystem: `Você é um analista de software sênior. Com base nos resumos do review por arquivo de uma Pull Request, gere um sumário executivo em português brasileiro usando markdown.
+
+Estruture o sumário assim:
+
+## 📋 Sumário da PR
+
+### O que está sendo entregue
+Descreva de forma clara e concisa o que esta PR implementa, altera ou corrige. Foque no valor de negócio e no impacto funcional, não em detalhes técnicos de baixo nível.
+
+### Regras de negócio e validações
+Liste as regras de negócio implementadas ou alteradas, validações adicionadas/modificadas, e fluxos de dados relevantes. Se não houver regras de negócio claras, indique isso.
+
+### Componentes impactados
+Liste os módulos, camadas ou componentes do sistema que foram alterados (ex: API, banco de dados, frontend, serviços, etc.).
+
+### Riscos e pontos de atenção
+Destaque possíveis riscos, dependências entre arquivos, ou pontos que merecem atenção especial durante testes ou deploy.
+
+Regras:
+- Seja objetivo e direto, sem repetir informações do review por arquivo
+- Use linguagem acessível para quem não é desenvolvedor (gestores, POs)
+- Se houver especificação de Work Items, relacione as entregas com os requisitos
+- Responda SOMENTE com o markdown, sem JSON, sem code fences ao redor`,
 
     noChanges: '✅ Nenhum arquivo de código encontrado para analisar nesta PR.',
     diffTooLarge: '⚠️ Diff truncado por exceder o tamanho máximo configurado.',
@@ -220,6 +245,30 @@ A "SPECIFICATION (Work Items)" section will be provided below with title, descri
 5. If meetsSpecification is false, you MUST add an issue with severity "important" describing specifically which requirement or acceptance criterion was not implemented
 6. Files unrelated to the specification (e.g., configs, docs) should have meetsSpecification set to true and specificationNotes as empty string`,
 
+    prSummarySystem: `You are a senior software analyst. Based on the per-file review summaries of a Pull Request, generate an executive summary in English using markdown.
+
+Structure the summary as follows:
+
+## 📋 PR Summary
+
+### What is being delivered
+Clearly and concisely describe what this PR implements, changes or fixes. Focus on business value and functional impact, not low-level technical details.
+
+### Business rules and validations
+List the business rules implemented or changed, validations added/modified, and relevant data flows. If there are no clear business rules, state that.
+
+### Impacted components
+List the modules, layers or system components that were changed (e.g., API, database, frontend, services, etc.).
+
+### Risks and attention points
+Highlight possible risks, dependencies between files, or points that deserve special attention during testing or deployment.
+
+Rules:
+- Be objective and direct, do not repeat information from per-file reviews
+- Use language accessible to non-developers (managers, POs)
+- If Work Item specifications are available, relate deliverables to requirements
+- Respond ONLY with markdown, no JSON, no code fences around it`,
+
     noChanges: '✅ No code files found to analyze in this PR.',
     diffTooLarge: '⚠️ Diff truncated due to exceeding the configured maximum size.',
     reviewHeader: '## 🤖 Claude PR Review\n\n',
@@ -326,6 +375,30 @@ Una sección "ESPECIFICACIÓN (Work Items)" será proporcionada abajo con títul
 4. Llenar "specificationNotes" con una explicación concreta: qué se cumplió, qué falta, o qué criterios de aceptación no fueron cubiertos
 5. Si meetsSpecification es false, agregar obligatoriamente un issue con severity "important" describiendo específicamente qué requisito o criterio de aceptación no fue implementado
 6. Archivos no relacionados con la especificación (ej: configs, docs) deben tener meetsSpecification como true y specificationNotes vacío`,
+
+    prSummarySystem: `Eres un analista de software sénior. Con base en los resúmenes del review por archivo de un Pull Request, genera un resumen ejecutivo en español usando markdown.
+
+Estructura el resumen así:
+
+## 📋 Resumen de la PR
+
+### Qué se está entregando
+Describe de forma clara y concisa qué implementa, cambia o corrige esta PR. Enfócate en el valor de negocio y el impacto funcional, no en detalles técnicos de bajo nivel.
+
+### Reglas de negocio y validaciones
+Lista las reglas de negocio implementadas o alteradas, validaciones agregadas/modificadas, y flujos de datos relevantes. Si no hay reglas de negocio claras, indícalo.
+
+### Componentes impactados
+Lista los módulos, capas o componentes del sistema que fueron alterados (ej: API, base de datos, frontend, servicios, etc.).
+
+### Riesgos y puntos de atención
+Destaca posibles riesgos, dependencias entre archivos, o puntos que merecen atención especial durante pruebas o deploy.
+
+Reglas:
+- Sé objetivo y directo, sin repetir información del review por archivo
+- Usa lenguaje accesible para quienes no son desarrolladores (gestores, POs)
+- Si hay especificación de Work Items, relaciona las entregas con los requisitos
+- Responde SOLO con markdown, sin JSON, sin code fences alrededor`,
 
     noChanges: '✅ No se encontraron archivos de código para analizar en este PR.',
     diffTooLarge: '⚠️ Diff truncado por exceder el tamaño máximo configurado.',

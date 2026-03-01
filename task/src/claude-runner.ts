@@ -165,6 +165,38 @@ export function runReview(
 }
 
 /**
+ * Monta o prompt para gerar o sumário executivo da PR.
+ * Usa os resumos dos FileReviews (não os diffs completos) para ser leve e rápido.
+ */
+export function buildPRSummaryPrompt(
+  reviews: FileReview[],
+  specificationContext?: string
+): string {
+  let prompt = 'Gere um sumário executivo desta Pull Request com base nos seguintes reviews por arquivo:\n\n';
+
+  for (const review of reviews) {
+    prompt += `📄 ${review.file}\n`;
+    prompt += `   Resumo: ${review.summary}\n`;
+    if (review.issues.length > 0) {
+      prompt += `   Issues: ${review.issues.map(i => `[${i.severity}] ${i.description}`).join('; ')}\n`;
+    }
+    if (review.positives) {
+      prompt += `   Positivos: ${review.positives}\n`;
+    }
+    if (review.specificationNotes) {
+      prompt += `   Especificação: ${review.specificationNotes}\n`;
+    }
+    prompt += '\n';
+  }
+
+  if (specificationContext) {
+    prompt += `\n===== ESPECIFICAÇÃO (Work Items) =====\n${specificationContext}\n\n`;
+  }
+
+  return prompt;
+}
+
+/**
  * Monta o prompt estruturado com delimitadores por arquivo para o modo per-file.
  */
 export function buildStructuredPrompt(
