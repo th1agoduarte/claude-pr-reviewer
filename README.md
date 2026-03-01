@@ -2,16 +2,20 @@
 
 Extensão para Azure DevOps que faz review automático de Pull Requests usando **Claude AI** via **subscription** (sem custo extra de API).
 
-## ✨ Novidades v2.0.0
+## ✨ Features
 
-- 🔔 **Notificação no Teams** — envia Adaptive Card com resumo do review via webhook
+- 🤖 **Review automático de PRs** com Claude Sonnet, Opus ou Haiku
+- 📄 **Comentários por arquivo** — feedback na aba "Files" da PR
+- 📋 **Sumário executivo** — resumo da PR com regras de negócio, componentes impactados e riscos
+- 🟢 **Status condicional** — issues críticos/importantes ficam "Active", sugestões ficam "Closed"
+- 🔔 **Notificação no Teams** — Adaptive Card com resumo + sumário executivo via webhook
 - 📋 **Validação de especificação** — valida código contra Work Items linkados (descrição e critérios de aceite)
-- 🟢 **Status condicional** — issues críticos/importantes ficam "Active" (requerem ação), sugestões ficam "Closed"
-- 📏 **maxDiffSize aumentado** — padrão de 50.000 caracteres (antes 30.000)
-- 📄 **Review por arquivo** — comentários na aba "Files" da PR (v1.1.0)
-- 🗑️ **Limpeza automática** — reviews anteriores removidos antes de novos
+- 📦 **Review em lotes** — PRs grandes divididas automaticamente em lotes para cobrir todos os arquivos
 - 🏷️ **Label "AI-Reviewed"** — adicionada automaticamente à PR
+- 🌍 **Multi-idioma**: Português (BR), English, Español
+- 🔑 **Usa sua subscription** — sem necessidade de API key separada
 - 🔒 **Detecção de dados sensíveis** — verifica .md, .json, .yml por senhas/tokens/keys
+- ⚙️ **Prompt customizável** para regras específicas do time
 
 ## 📁 Estrutura do Projeto
 
@@ -164,14 +168,36 @@ Veja mais exemplos em `examples/azure-pipelines.yml`.
 | `reviewLanguage` | `pt-br`, `en`, `es` | `pt-br` |
 | `fileExtensions` | Extensões a analisar | `ts,js,tsx,jsx,py,php,vue,cs,...` |
 | `excludePaths` | Caminhos a ignorar | `node_modules,dist,build,vendor,...` |
-| `maxDiffSize` | Max caracteres do diff total | `50000` |
-| `maxFileDiffSize` | Max caracteres do diff por arquivo | (sem limite) |
+| `maxDiffSize` | Max chars do diff por lote | `150000` |
+| `maxFileDiffSize` | Max chars do diff por arquivo | (sem limite) |
 | `customPrompt` | Instruções extras para o review | (vazio) |
 | `maxTurns` | Turnos do Claude Code | `1` |
 | `failOnError` | Falhar pipeline em erro | `false` |
 | `postComment` | Postar na PR | `true` |
 | `perFileReview` | Comentários por arquivo (aba Files) | `true` |
 | `teamsWebhookUrl` | URL do webhook do Teams (Adaptive Card) | (vazio) |
+
+## 📋 Sumário Executivo
+
+Após o review por arquivo, o Claude gera automaticamente um **sumário executivo** da PR:
+
+- **O que está sendo entregue** — visão de negócio, não técnica
+- **Regras de negócio e validações** — regras implementadas ou alteradas
+- **Componentes impactados** — módulos e camadas afetados
+- **Riscos e pontos de atenção** — dependências e cuidados para deploy
+
+O sumário usa linguagem acessível para gestores e POs, e é incluído tanto no **comentário da PR** quanto na **notificação do Teams**.
+
+## 📦 Review em Lotes
+
+Para PRs grandes onde o diff total excede `maxDiffSize`, a extensão **divide automaticamente em lotes**:
+
+1. Coleta todos os diffs de todos os arquivos
+2. Agrupa em lotes que cabem no limite de tamanho
+3. Faz uma chamada ao Claude por lote (cada um com a especificação completa)
+4. Junta todos os resultados e posta os comentários
+
+Nenhum arquivo fica de fora — todos são analisados.
 
 ## 🔔 Notificação no Teams
 
@@ -182,6 +208,12 @@ Para receber resumos de review no Microsoft Teams:
    - Copie a URL do webhook gerado
 2. Armazene a URL como variável no Azure DevOps (ex: `TEAMS_WEBHOOK_URL`)
 3. Configure na task: `teamsWebhookUrl: $(TEAMS_WEBHOOK_URL)`
+
+O Adaptive Card inclui:
+- Número da PR e branches
+- Contagem de issues por severidade
+- **Sumário executivo** da PR
+- Link direto para a PR
 
 Se a variável não estiver configurada ou estiver vazia, a notificação é simplesmente ignorada (sem erro).
 
@@ -197,7 +229,7 @@ Isso funciona automaticamente — basta linkar Work Items à PR normalmente no A
 
 ## 🟢 Status Condicional dos Comentários
 
-Os comentários agora usam status inteligente:
+Os comentários usam status inteligente:
 - **Active** — se o arquivo tem issues 🔴 Críticos ou 🟡 Importantes (requer ação do desenvolvedor)
 - **Closed** — se o arquivo tem apenas 🔵 Sugestões (informativo, não bloqueia)
 

@@ -199,7 +199,8 @@ function buildTeamsCard(
   ctx: AzureDevOpsContext,
   reviews: FileReview[] | null,
   model: string,
-  reviewText?: string
+  reviewText?: string,
+  prSummary?: string
 ): object {
   const facts: { title: string; value: string }[] = [
     { title: 'PR', value: `#${ctx.prId}: ${ctx.sourceBranch} → ${ctx.targetBranch}` },
@@ -237,6 +238,49 @@ function buildTeamsCard(
   const repoSlug = ctx.repoName || ctx.repoId;
   const prUrl = `${ctx.orgUrl}/${encodeURIComponent(ctx.project)}/_git/${encodeURIComponent(repoSlug)}/pullrequest/${ctx.prId}`;
 
+  // Monta o body do Adaptive Card
+  const body: object[] = [
+    {
+      type: 'TextBlock',
+      text: '🤖 Claude PR Review',
+      weight: 'Bolder',
+      size: 'Medium',
+    },
+    {
+      type: 'FactSet',
+      facts,
+    },
+  ];
+
+  // Adiciona sumário executivo se disponível
+  if (prSummary) {
+    // Remove headers markdown (##) para ficar limpo no card
+    const cleanSummary = prSummary
+      .replace(/^#{1,3}\s+.*$/gm, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
+    // Limita a 1000 chars para não estourar o card
+    const truncated = cleanSummary.length > 1000
+      ? cleanSummary.substring(0, 1000) + '...'
+      : cleanSummary;
+
+    body.push(
+      {
+        type: 'TextBlock',
+        text: '📋 **Sumário**',
+        weight: 'Bolder',
+        spacing: 'Medium',
+      },
+      {
+        type: 'TextBlock',
+        text: truncated,
+        wrap: true,
+        spacing: 'Small',
+      }
+    );
+  }
+
   return {
     type: 'message',
     attachments: [
@@ -245,18 +289,7 @@ function buildTeamsCard(
         content: {
           type: 'AdaptiveCard',
           version: '1.4',
-          body: [
-            {
-              type: 'TextBlock',
-              text: '🤖 Claude PR Review',
-              weight: 'Bolder',
-              size: 'Medium',
-            },
-            {
-              type: 'FactSet',
-              facts,
-            },
-          ],
+          body,
           actions: [
             {
               type: 'Action.OpenUrl',
@@ -452,7 +485,7 @@ async function runPerFileReview(
   // 8. Notificar Teams (se configurado)
   if (teamsWebhookUrl) {
     console.log('\n📨 Enviando notificação para o Teams...');
-    const card = buildTeamsCard(ctx, allReviews, model);
+    const card = buildTeamsCard(ctx, allReviews, model, undefined, prSummaryText || undefined);
     await sendTeamsNotification(teamsWebhookUrl, card);
   }
 
