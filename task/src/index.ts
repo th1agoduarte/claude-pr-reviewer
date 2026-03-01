@@ -22,7 +22,7 @@ async function run(): Promise<void> {
     const apiKey = tl.getInput('apiKey', false);
     const model = tl.getInput('model', false) || 'claude-sonnet-4-5-20250929';
     const reviewLanguage = tl.getInput('reviewLanguage', false) || 'pt-br';
-    const fileExtensions = (tl.getInput('fileExtensions', false) || 'ts,js,py,php,vue,cs,java,go')
+    const fileExtensions = (tl.getInput('fileExtensions', false) || 'ts,js,py,php,vue,cs,java,go,md,json,yml,yaml')
       .split(',')
       .map((e) => e.trim())
       .filter(Boolean);
@@ -63,7 +63,7 @@ async function run(): Promise<void> {
 
     // ─── 3. Coletar diff ────────────────────────────────────
     console.log('📂 Coletando diff dos arquivos alterados...');
-    let diff = getLocalDiff(ctx.targetBranch, fileExtensions, excludePaths, maxDiffSize, ctx.accessToken);
+    let diff = getLocalDiff(ctx.targetBranch, fileExtensions, excludePaths, maxDiffSize);
 
     if (!diff || diff.trim().length === 0) {
       console.log(prompt.noChanges);

@@ -72,70 +72,70 @@ function createClient(ctx: AzureDevOpsContext): AxiosInstance {
 }
 
 /**
- * Configura credencial git usando o System.AccessToken do pipeline.
- * Necessário para que git fetch funcione no agente.
+ * Resolve o nome da branch target a partir das variáveis do pipeline.
  */
-function configureGitAuth(accessToken: string): void {
-  const orgUrl = tl.getVariable('System.CollectionUri') || '';
-  if (!orgUrl || !accessToken) return;
-
-  try {
-    const base64Token = Buffer.from(`:${accessToken}`).toString('base64');
-    const header = `AUTHORIZATION: Basic ${base64Token}`;
-    tl.execSync('git', `config http.extraheader "${header}"`);
-    tl.debug('Git auth configurado via extraheader.');
-  } catch {
-    tl.debug('Não foi possível configurar git auth.');
+function resolveTargetBranch(targetBranch: string): string {
+  // Tenta primeiro System.PullRequest.TargetBranchName (mais confiável)
+  let target = tl.getVariable('System.PullRequest.TargetBranchName') || '';
+  if (!target) {
+    target = targetBranch;
+    if (target.startsWith('refs/heads/')) {
+      target = target.replace('refs/heads/', '');
+    }
   }
+  return target;
 }
 
 /**
  * Obtém os arquivos alterados na PR via git diff local.
- * Mais confiável e rápido que chamar a REST API.
+ * Usa os refs já disponíveis do checkout do pipeline.
+ * O fetch é não-fatal — o checkout step do Azure DevOps já traz os refs necessários.
  */
 export function getLocalDiff(
   targetBranch: string,
   fileExtensions: string[],
   excludePaths: string[],
-  maxSize: number,
-  accessToken?: string
+  maxSize: number
 ): string {
-  // Monta o filtro de extensões para o git diff
-  const extPatterns = fileExtensions.map((ext) => `'*.${ext.trim()}'`).join(' ');
+  const target = resolveTargetBranch(targetBranch);
 
-  // Monta exclusões
-  const excludeArgs = excludePaths
-    .map((p) => `':(exclude)${p.trim()}/**'`)
-    .join(' ');
-
-  // Normaliza o nome da branch target
-  let target = targetBranch;
-  if (target.startsWith('refs/heads/')) {
-    target = target.replace('refs/heads/', '');
-  }
-
-  // Configura autenticação git para o fetch
-  if (accessToken) {
-    configureGitAuth(accessToken);
-  }
-
+  // Tenta fetch não-fatal — confia nos refs do checkout do pipeline
   try {
-    // Tenta buscar a branch target para garantir que temos as refs
     tl.execSync('git', `fetch origin ${target} --depth=1`);
   } catch {
-    tl.debug(`Não foi possível fazer fetch de origin/${target}, tentando com refs disponíveis.`);
+    console.log(`Aviso: Falha ao fazer fetch de origin/${target}. Continuando com refs locais...`);
+  }
+
+  // Monta argumentos como array para evitar problemas com aspas
+  const diffArgs: string[] = [
+    'diff',
+    `origin/${target}...HEAD`,
+    '--no-color',
+    '--unified=3',
+    '--diff-filter=AM',
+    '--',
+  ];
+
+  // Adiciona filtros de extensão (SEM aspas)
+  for (const ext of fileExtensions) {
+    diffArgs.push(`*.${ext.trim()}`);
+  }
+
+  // Adiciona exclusões (SEM aspas)
+  for (const p of excludePaths) {
+    diffArgs.push(`:(exclude)${p.trim()}/**`);
   }
 
   try {
-    const diffCmd = `diff origin/${target}...HEAD --no-color --unified=3 -- ${extPatterns} ${excludeArgs}`;
-    tl.debug(`Executando: git ${diffCmd}`);
+    const diffCmdStr = diffArgs.join(' ');
+    tl.debug(`Executando: git ${diffCmdStr}`);
 
-    const result = tl.execSync('git', diffCmd);
+    const result = tl.execSync('git', diffCmdStr);
     let diff = result.stdout || '';
 
     if (diff.length > maxSize) {
-      diff = diff.substring(0, maxSize);
       tl.warning(`Diff truncado de ${diff.length} para ${maxSize} caracteres.`);
+      diff = diff.substring(0, maxSize);
     }
 
     return diff;

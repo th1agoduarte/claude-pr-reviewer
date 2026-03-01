@@ -33,7 +33,8 @@ Regras:
 - Seja objetivo e construtivo
 - Referencie arquivos e linhas específicas quando possível
 - Se não encontrar problemas, diga isso claramente
-- Use markdown para formatação`,
+- Use markdown para formatação
+- Verifique TODOS os arquivos (incluindo .md, .json, .yml) em busca de dados sensíveis: senhas, tokens, API keys, credenciais, IPs internos, emails pessoais. Reporte como 🔴 Crítico.`,
 
     noChanges: '✅ Nenhum arquivo de código encontrado para analisar nesta PR.',
     diffTooLarge: '⚠️ Diff truncado por exceder o tamanho máximo configurado.',
@@ -64,7 +65,8 @@ Rules:
 - Be objective and constructive
 - Reference specific files and lines when possible
 - If no issues found, state that clearly
-- Use markdown for formatting`,
+- Use markdown for formatting
+- Check ALL files (including .md, .json, .yml) for sensitive data: passwords, tokens, API keys, credentials, internal IPs, personal emails. Report as 🔴 Critical.`,
 
     noChanges: '✅ No code files found to analyze in this PR.',
     diffTooLarge: '⚠️ Diff truncated due to exceeding the configured maximum size.',
@@ -95,7 +97,8 @@ Reglas:
 - Sé objetivo y constructivo
 - Referencia archivos y líneas específicas cuando sea posible
 - Si no encuentras problemas, dilo claramente
-- Usa markdown para formateo`,
+- Usa markdown para formateo
+- Verifica TODOS los archivos (incluyendo .md, .json, .yml) en busca de datos sensibles: contraseñas, tokens, API keys, credenciales, IPs internos, emails personales. Reporta como 🔴 Crítico.`,
 
     noChanges: '✅ No se encontraron archivos de código para analizar en este PR.',
     diffTooLarge: '⚠️ Diff truncado por exceder el tamaño máximo configurado.',

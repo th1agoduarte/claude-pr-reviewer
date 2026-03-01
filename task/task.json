@@ -12,7 +12,7 @@
   "version": {
     "Major": 1,
     "Minor": 0,
-    "Patch": 0
+    "Patch": 2
   },
   "instanceNameFormat": "Claude PR Review - $(model)",
   "groups": [
@@ -102,7 +102,7 @@
       "type": "string",
       "label": "Extensões de arquivo",
       "required": false,
-      "defaultValue": "ts,js,tsx,jsx,py,php,vue,cs,java,go,rb,rs,kt,swift,cpp,c,h",
+      "defaultValue": "ts,js,tsx,jsx,py,php,vue,cs,java,go,rb,rs,kt,swift,cpp,c,h,md,json,yml,yaml",
       "helpMarkDown": "Lista de extensões de arquivo separadas por vírgula. Apenas arquivos com estas extensões serão analisados.",
       "groupName": "filters"
     },
