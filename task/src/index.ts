@@ -56,10 +56,8 @@ async function run(): Promise<void> {
       .split(',')
       .map((e) => e.trim())
       .filter(Boolean);
-    const maxDiffSize = parseInt(tl.getInput('maxDiffSize', false) || '50000', 10);
-    const maxFileDiffSizeRaw = tl.getInput('maxFileDiffSize', false) || '';
-    const parsedMaxFileDiff = parseInt(maxFileDiffSizeRaw, 10);
-    const maxFileDiffSize = maxFileDiffSizeRaw && !isNaN(parsedMaxFileDiff) ? parsedMaxFileDiff : 0; // 0 = sem limite por arquivo
+    const maxDiffSize = parseInt(tl.getInput('maxDiffSize', false) || '150000', 10);
+    const maxFileDiffSize = parseInt(tl.getInput('maxFileDiffSize', false) || '0', 10) || 0; // 0 = sem limite por arquivo
     const customPrompt = tl.getInput('customPrompt', false) || '';
     const maxTurns = parseInt(tl.getInput('maxTurns', false) || '1', 10);
     const failOnError = tl.getBoolInput('failOnError', false);
@@ -272,8 +270,39 @@ function buildTeamsCard(
 }
 
 /**
- * Modo per-file: coleta diff por arquivo, uma chamada ao Claude com JSON estruturado,
- * posta comentários individuais na aba "Files" da PR.
+ * Divide os diffs em lotes que cabem dentro do maxDiffSize.
+ * Cada lote é um Map<string, string> com diffs que somam <= maxDiffSize.
+ */
+function splitIntoBatches(
+  allDiffs: Map<string, string>,
+  maxDiffSize: number
+): Map<string, string>[] {
+  const batches: Map<string, string>[] = [];
+  let currentBatch = new Map<string, string>();
+  let currentSize = 0;
+
+  for (const [file, diff] of allDiffs) {
+    // Se um único arquivo excede o limite, ele vai sozinho em um lote
+    if (currentSize + diff.length > maxDiffSize && currentBatch.size > 0) {
+      batches.push(currentBatch);
+      currentBatch = new Map<string, string>();
+      currentSize = 0;
+    }
+
+    currentBatch.set(file, diff);
+    currentSize += diff.length;
+  }
+
+  if (currentBatch.size > 0) {
+    batches.push(currentBatch);
+  }
+
+  return batches;
+}
+
+/**
+ * Modo per-file: coleta diff por arquivo, divide em lotes se necessário,
+ * faz uma chamada ao Claude por lote, e posta comentários na aba "Files" da PR.
  */
 async function runPerFileReview(
   ctx: AzureDevOpsContext,
@@ -304,64 +333,81 @@ async function runPerFileReview(
 
   // 2. Coletar diff de cada arquivo
   console.log('📂 Coletando diffs por arquivo...');
-  const fileDiffs = new Map<string, string>();
+  const allDiffs = new Map<string, string>();
   let totalSize = 0;
 
-  let filesIgnored = 0;
-
   for (const file of files) {
-    if (totalSize >= maxDiffSize) {
-      filesIgnored = files.length - fileDiffs.size;
-      console.log(`⚠️ Limite total de diff atingido (${maxDiffSize} chars). ${filesIgnored} arquivo(s) restante(s) ignorado(s).`);
-      break;
-    }
-
     const diff = getFileDiff(ctx.targetBranch, file, maxFileDiffSize);
     if (diff && diff.trim().length > 0) {
-      fileDiffs.set(file, diff);
+      allDiffs.set(file, diff);
       totalSize += diff.length;
     }
   }
 
-  if (fileDiffs.size === 0) {
+  if (allDiffs.size === 0) {
     console.log(prompt.noChanges);
     return;
   }
 
-  console.log(`📊 Diffs coletados: ${fileDiffs.size} arquivo(s), ${totalSize} caracteres total\n`);
+  console.log(`📊 Diffs coletados: ${allDiffs.size} arquivo(s), ${totalSize} caracteres total\n`);
 
   // 3. Coletar especificações dos Work Items (se houver)
   const specificationContext = await buildSpecificationContext(ctx);
   const hasSpec = specificationContext.length > 0;
-
-  // 4. Montar prompt e chamar Claude (uma única chamada)
-  const structuredPrompt = buildStructuredPrompt(fileDiffs, customPrompt, specificationContext || undefined);
   const systemPrompt = hasSpec ? prompt.perFileSystemWithSpec : prompt.perFileSystem;
-  const rawReview = runReview(structuredPrompt, systemPrompt, '', options);
 
-  // Salva o review como variável de saída
-  tl.setVariable('ClaudeReviewOutput', rawReview, false, true);
+  // 4. Dividir em lotes e chamar Claude
+  const batches = splitIntoBatches(allDiffs, maxDiffSize);
+  const allReviews: FileReview[] = [];
+  let rawOutputs: string[] = [];
 
-  // 5. Parsear e validar resposta JSON
-  const parsedReviews = parseFileReviews(rawReview);
-  const fileReviews = parsedReviews ? validateFileReviews(parsedReviews) : null;
+  if (batches.length > 1) {
+    console.log(`📦 Diff total (${totalSize} chars) excede o limite por chamada (${maxDiffSize} chars).`);
+    console.log(`   Dividindo em ${batches.length} lote(s) para cobrir todos os arquivos.\n`);
+  }
 
-  if (!fileReviews) {
-    // Fallback: postar como comentário global
+  for (let i = 0; i < batches.length; i++) {
+    const batch = batches[i];
+    const batchFiles = [...batch.keys()];
+    const batchSize = [...batch.values()].reduce((s, d) => s + d.length, 0);
+
+    if (batches.length > 1) {
+      console.log(`🔄 Lote ${i + 1}/${batches.length}: ${batch.size} arquivo(s), ${batchSize} chars [${batchFiles.join(', ')}]`);
+    }
+
+    const structuredPrompt = buildStructuredPrompt(batch, customPrompt, specificationContext || undefined);
+    const rawReview = runReview(structuredPrompt, systemPrompt, '', options);
+    rawOutputs.push(rawReview);
+
+    const parsedReviews = parseFileReviews(rawReview);
+    const validReviews = parsedReviews ? validateFileReviews(parsedReviews) : null;
+
+    if (validReviews) {
+      allReviews.push(...validReviews);
+    } else {
+      console.log(`⚠️ Lote ${i + 1}: não foi possível parsear JSON. Resultado salvo como texto.`);
+    }
+  }
+
+  // Salva o review como variável de saída (concatena todos os lotes)
+  tl.setVariable('ClaudeReviewOutput', rawOutputs.join('\n\n---\n\n'), false, true);
+
+  if (allReviews.length === 0) {
+    // Fallback: postar como comentário global com o texto bruto
     console.log('⚠️ Fallback: postando review como comentário global...');
     if (postComment) {
-      const fullComment = REVIEW_MARKER + '\n' + prompt.reviewHeader + rawReview + prompt.reviewFooter(model);
+      const fullComment = REVIEW_MARKER + '\n' + prompt.reviewHeader + rawOutputs.join('\n\n') + prompt.reviewFooter(model);
       await postPRComment(ctx, fullComment);
     }
     return;
   }
 
-  console.log(`✅ JSON parseado: ${fileReviews.length} arquivo(s) analisado(s)\n`);
+  console.log(`\n✅ Total: ${allReviews.length} arquivo(s) analisado(s) em ${batches.length} lote(s)\n`);
 
   if (!postComment) {
     console.log('📝 Review gerado (postComment desabilitado):');
     console.log('─'.repeat(50));
-    for (const review of fileReviews) {
+    for (const review of allReviews) {
       if (review.hasFeedback) {
         console.log(`\n📄 ${review.file}:`);
         console.log(formatFileReviewAsMarkdown(review, REVIEW_MARKER));
@@ -371,11 +417,11 @@ async function runPerFileReview(
     return;
   }
 
-  // 6. Postar comentários por arquivo com status condicional
+  // 5. Postar comentários por arquivo com status condicional
   console.log('\n💬 Postando reviews por arquivo...');
   let filesWithFeedback = 0;
 
-  for (const review of fileReviews) {
+  for (const review of allReviews) {
     if (review.hasFeedback && review.issues.length > 0) {
       const markdown = formatFileReviewAsMarkdown(review, REVIEW_MARKER);
       const status = determineThreadStatus(review);
@@ -384,17 +430,17 @@ async function runPerFileReview(
     }
   }
 
-  // 8. Postar resumo global
-  const summaryComment = buildSummaryComment(fileReviews, model, prompt, hasSpec);
+  // 6. Postar resumo global
+  const summaryComment = buildSummaryComment(allReviews, model, prompt, hasSpec, batches.length);
   await postPRComment(ctx, summaryComment);
 
-  // 9. Adicionar label
+  // 7. Adicionar label
   await addLabel(ctx, 'AI-Reviewed');
 
-  // 10. Notificar Teams (se configurado)
+  // 8. Notificar Teams (se configurado)
   if (teamsWebhookUrl) {
     console.log('\n📨 Enviando notificação para o Teams...');
-    const card = buildTeamsCard(ctx, fileReviews, model);
+    const card = buildTeamsCard(ctx, allReviews, model);
     await sendTeamsNotification(teamsWebhookUrl, card);
   }
 
@@ -464,7 +510,8 @@ function buildSummaryComment(
   reviews: FileReview[],
   model: string,
   prompt: ReviewPrompt,
-  hasSpecification: boolean = false
+  hasSpecification: boolean = false,
+  batchCount: number = 1
 ): string {
   let critical = 0;
   let important = 0;
@@ -490,7 +537,11 @@ function buildSummaryComment(
 
   let md = REVIEW_MARKER + '\n';
   md += prompt.reviewHeader;
-  md += `**${reviews.length}** arquivo(s) analisado(s), **${filesWithIssues}** com feedback.\n\n`;
+  md += `**${reviews.length}** arquivo(s) analisado(s), **${filesWithIssues}** com feedback.`;
+  if (batchCount > 1) {
+    md += ` *(${batchCount} lotes de análise)*`;
+  }
+  md += '\n\n';
 
   if (totalIssues > 0) {
     md += '| Severidade | Quantidade |\n';

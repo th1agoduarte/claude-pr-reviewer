@@ -2,7 +2,7 @@
   "manifestVersion": 1,
   "id": "ClaudeCodeReviewBySubscriptonTokem",
   "publisher": "ClaudeCodeReviewBySubscriptionToken",
-  "version": "2.0.7",
+  "version": "2.0.9",
   "name": "Claude Code Review By Subscription",
   "description": "Análise automática de Pull Requests usando Claude AI via subscription (Claude Code CLI). Suporte a múltiplos idiomas e modelos.",
   "public": false,

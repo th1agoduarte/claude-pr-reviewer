@@ -12,7 +12,7 @@
   "version": {
     "Major": 2,
     "Minor": 0,
-    "Patch": 7
+    "Patch": 9
   },
   "instanceNameFormat": "Claude PR Review - $(model)",
   "groups": [
@@ -120,8 +120,8 @@
       "type": "string",
       "label": "Tamanho máximo do diff (caracteres)",
       "required": false,
-      "defaultValue": "50000",
-      "helpMarkDown": "Tamanho máximo do diff a enviar para análise. Diffs maiores serão truncados.",
+      "defaultValue": "150000",
+      "helpMarkDown": "Tamanho máximo total do diff a enviar para análise. Arquivos que excedem o limite são ignorados (mas listados no prompt).",
       "groupName": "filters"
     },
     {
