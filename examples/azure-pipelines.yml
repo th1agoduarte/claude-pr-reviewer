@@ -52,8 +52,6 @@ steps:
       # Filtros
       fileExtensions: 'ts,js,tsx,jsx,py,php,vue,cs,java,go,md,json,yml,yaml'
       excludePaths: 'node_modules,dist,build,vendor,.next,__pycache__,*.test.*,*.spec.*'
-      maxDiffSize: '50000'
-      maxFileDiffSize: '10000'
 
       # Review por arquivo (comentários na aba Files da PR)
       perFileReview: true

@@ -127,7 +127,7 @@ Se a PR tiver Work Items linkados com descrição e/ou critérios de aceite, o C
 | `fileExtensions` | Extensões a analisar | `ts,js,py,php,vue,cs,...` |
 | `excludePaths` | Caminhos a ignorar | `node_modules,dist,...` |
 | `maxDiffSize` | Max caracteres do diff total | `50000` |
-| `maxFileDiffSize` | Max caracteres do diff por arquivo | `10000` |
+| `maxFileDiffSize` | Max caracteres do diff por arquivo | (sem limite) |
 | `customPrompt` | Instruções extras | (vazio) |
 | `failOnError` | Falhar pipeline em erro | `false` |
 | `postComment` | Postar na PR | `true` |

@@ -118,8 +118,6 @@ No Azure DevOps:
     model: 'claude-sonnet-4-5-20250929'
     reviewLanguage: 'pt-br'
     perFileReview: true
-    maxDiffSize: '50000'
-    maxFileDiffSize: '10000'
     fileExtensions: 'ts,js,py,php,vue,cs,java,go,md,json,yml,yaml'
     teamsWebhookUrl: $(TEAMS_WEBHOOK_URL)
     customPrompt: 'Foque em segurança e performance'
@@ -167,7 +165,7 @@ Veja mais exemplos em `examples/azure-pipelines.yml`.
 | `fileExtensions` | Extensões a analisar | `ts,js,tsx,jsx,py,php,vue,cs,...` |
 | `excludePaths` | Caminhos a ignorar | `node_modules,dist,build,vendor,...` |
 | `maxDiffSize` | Max caracteres do diff total | `50000` |
-| `maxFileDiffSize` | Max caracteres do diff por arquivo | `10000` |
+| `maxFileDiffSize` | Max caracteres do diff por arquivo | (sem limite) |
 | `customPrompt` | Instruções extras para o review | (vazio) |
 | `maxTurns` | Turnos do Claude Code | `1` |
 | `failOnError` | Falhar pipeline em erro | `false` |
