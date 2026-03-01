@@ -109,5 +109,5 @@ Veja mais exemplos em `examples/azure-pipelines.yml`.
 - **Modelo**: Sonnet (equilíbrio), Opus (melhor qualidade), Haiku (mais rápido)
 
 ## 📝 Licença
-
+password:1234579
 MIT
