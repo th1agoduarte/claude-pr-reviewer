@@ -10,8 +10,8 @@
   "runsOn": ["Agent", "DeploymentGroup"],
   "author": "Your Name",
   "version": {
-    "Major": 1,
-    "Minor": 1,
+    "Major": 2,
+    "Minor": 0,
     "Patch": 0
   },
   "instanceNameFormat": "Claude PR Review - $(model)",
@@ -120,7 +120,7 @@
       "type": "string",
       "label": "Tamanho máximo do diff (caracteres)",
       "required": false,
-      "defaultValue": "30000",
+      "defaultValue": "50000",
       "helpMarkDown": "Tamanho máximo do diff a enviar para análise. Diffs maiores serão truncados.",
       "groupName": "filters"
     },
@@ -177,6 +177,15 @@
       "defaultValue": "10000",
       "helpMarkDown": "Tamanho máximo do diff de cada arquivo individual. Usado quando 'Review por arquivo' está habilitado.",
       "groupName": "filters"
+    },
+    {
+      "name": "teamsWebhookUrl",
+      "type": "string",
+      "label": "Teams Webhook URL (opcional)",
+      "required": false,
+      "defaultValue": "",
+      "helpMarkDown": "URL do webhook do Microsoft Teams (Power Automate Workflow). Se informado, envia um resumo do review como Adaptive Card no Teams. Se vazio, a notificação é ignorada.",
+      "groupName": "advanced"
     }
   ],
   "execution": {

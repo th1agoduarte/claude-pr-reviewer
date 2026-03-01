@@ -27,9 +27,6 @@ export function getPipelineContext(): AzureDevOpsContext | null {
   if (!prId) {
     return null;
   }
-  if (!prId) {
-    return null;
-  }
 
   const orgUrl = tl.getVariable('System.CollectionUri') || '';
   const project = tl.getVariable('System.TeamProject') || '';
@@ -150,7 +147,8 @@ export function getLocalDiff(
  */
 export async function postPRComment(
   ctx: AzureDevOpsContext,
-  content: string
+  content: string,
+  status: number = 4
 ): Promise<void> {
   const client = createClient(ctx);
 
@@ -162,7 +160,7 @@ export async function postPRComment(
         commentType: 1, // Text
       },
     ],
-    status: 4, // Closed (informativo, não bloqueia)
+    status, // 1=Active, 4=Closed
   };
 
   const url = `/git/repositories/${ctx.repoId}/pullRequests/${ctx.prId}/threads`;
@@ -268,7 +266,8 @@ export function getFileDiff(
 export async function postFileComment(
   ctx: AzureDevOpsContext,
   filePath: string,
-  content: string
+  content: string,
+  status: number = 4
 ): Promise<void> {
   const client = createClient(ctx);
 
@@ -283,7 +282,7 @@ export async function postFileComment(
     threadContext: {
       filePath: `/${filePath}`,
     },
-    status: 4, // Closed (informativo)
+    status, // 1=Active, 4=Closed
   };
 
   const url = `/git/repositories/${ctx.repoId}/pullRequests/${ctx.prId}/threads`;
@@ -356,5 +355,110 @@ export async function addLabel(
     } else {
       tl.warning(`Aviso: Não foi possível adicionar label "${labelName}": ${err.message}`);
     }
+  }
+}
+
+export interface WorkItemInfo {
+  id: number;
+  title: string;
+  description: string;
+  acceptanceCriteria: string;
+}
+
+/**
+ * Obtém os Work Items linkados à PR.
+ */
+export async function getLinkedWorkItems(
+  ctx: AzureDevOpsContext
+): Promise<{ id: number; url: string }[]> {
+  const client = createClient(ctx);
+  const url = `/git/repositories/${ctx.repoId}/pullRequests/${ctx.prId}/workitems`;
+
+  try {
+    const response = await client.get(url);
+    const items = response.data?.value || [];
+    return items.map((item: any) => ({
+      id: parseInt(item.id, 10),
+      url: item.url || '',
+    }));
+  } catch (err: any) {
+    tl.warning(`Aviso: Não foi possível obter Work Items da PR: ${err.message}`);
+    return [];
+  }
+}
+
+/**
+ * Obtém detalhes (título, descrição, critérios de aceite) dos Work Items.
+ */
+export async function getWorkItemDetails(
+  ctx: AzureDevOpsContext,
+  ids: number[]
+): Promise<WorkItemInfo[]> {
+  if (ids.length === 0) return [];
+
+  const client = axios.create({
+    baseURL: `${ctx.orgUrl}/${encodeURIComponent(ctx.project)}/_apis`,
+    headers: {
+      Authorization: `Bearer ${ctx.accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    params: {
+      'api-version': '7.1',
+    },
+  });
+
+  const idsParam = ids.join(',');
+  const fields = 'System.Title,System.Description,Microsoft.VSTS.Common.AcceptanceCriteria';
+  const url = `/wit/workitems?ids=${idsParam}&fields=${fields}`;
+
+  try {
+    const response = await client.get(url);
+    const items = response.data?.value || [];
+    return items.map((item: any) => ({
+      id: item.id,
+      title: item.fields?.['System.Title'] || '',
+      description: stripHtml(item.fields?.['System.Description'] || ''),
+      acceptanceCriteria: stripHtml(item.fields?.['Microsoft.VSTS.Common.AcceptanceCriteria'] || ''),
+    }));
+  } catch (err: any) {
+    tl.warning(`Aviso: Não foi possível obter detalhes dos Work Items: ${err.message}`);
+    return [];
+  }
+}
+
+/**
+ * Remove tags HTML de um texto (campos de Work Item são retornados em HTML).
+ */
+export function stripHtml(html: string): string {
+  if (!html) return '';
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/?(p|div|li|ul|ol|h[1-6])[^>]*>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
+ * Envia notificação para o Microsoft Teams via webhook (Adaptive Card).
+ */
+export async function sendTeamsNotification(
+  webhookUrl: string,
+  card: object
+): Promise<void> {
+  try {
+    await axios.post(webhookUrl, card, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 15_000,
+    });
+    console.log('📨 Notificação enviada para o Teams.');
+  } catch (err: any) {
+    tl.warning(`Aviso: Falha ao enviar notificação para o Teams: ${err.message}`);
   }
 }

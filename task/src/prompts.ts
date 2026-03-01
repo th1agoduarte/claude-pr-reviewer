@@ -5,6 +5,7 @@
 export interface ReviewPrompt {
   system: string;
   perFileSystem: string;
+  perFileSystemWithSpec: string;
   noChanges: string;
   diffTooLarge: string;
   reviewHeader: string;
@@ -12,6 +13,7 @@ export interface ReviewPrompt {
   errorMessage: string;
   fileReviewHeader: string;
   noFeedbackFile: string;
+  specificationRule: string;
 }
 
 const prompts: Record<string, ReviewPrompt> = {
@@ -70,6 +72,41 @@ Regras gerais:
 - O campo "line" é opcional mas recomendado quando possível
 - Seja objetivo e construtivo nas descrições`,
 
+    perFileSystemWithSpec: `Você é um revisor de código sênior. Analise as mudanças de cada arquivo desta Pull Request e responda EXCLUSIVAMENTE com um JSON array válido, sem nenhum texto antes ou depois.
+
+Formato de resposta (JSON array):
+[
+  {
+    "file": "caminho/do/arquivo.ts",
+    "summary": "Breve resumo das mudanças neste arquivo (1-2 frases)",
+    "issues": [
+      {
+        "severity": "critical|important|suggestion",
+        "line": 42,
+        "description": "Descrição do problema encontrado"
+      }
+    ],
+    "positives": "Pontos positivos (ou string vazia)",
+    "hasFeedback": true,
+    "meetsSpecification": true,
+    "specificationNotes": "Notas sobre aderência à especificação (ou string vazia)"
+  }
+]
+
+Regras de severidade:
+- critical: Bugs, vulnerabilidades de segurança, perda de dados, dados sensíveis expostos (senhas, tokens, API keys, credenciais, IPs internos)
+- important: Problemas de performance, lógica questionável, falta de tratamento de erros
+- suggestion: Melhorias de legibilidade, padrões de código, boas práticas
+
+Regras gerais:
+- Responda SOMENTE com o JSON array, sem markdown fences, sem texto explicativo
+- Se um arquivo não tem problemas, defina hasFeedback como false e issues como array vazio
+- Verifique TODOS os arquivos (incluindo .md, .json, .yml) em busca de dados sensíveis
+- O campo "line" é opcional mas recomendado quando possível
+- Seja objetivo e construtivo nas descrições
+- Uma seção "ESPECIFICAÇÃO (Work Items)" será fornecida com título, descrição e critérios de aceite dos Work Items linkados. Valide se o código atende à especificação e preencha "meetsSpecification" (boolean) e "specificationNotes" (string com observações)
+- Se meetsSpecification for false, adicione um issue com severity "important" descrevendo o que não foi atendido`,
+
     noChanges: '✅ Nenhum arquivo de código encontrado para analisar nesta PR.',
     diffTooLarge: '⚠️ Diff truncado por exceder o tamanho máximo configurado.',
     reviewHeader: '## 🤖 Claude PR Review\n\n',
@@ -78,6 +115,7 @@ Regras gerais:
     errorMessage: '❌ Erro ao executar o review automático. Verifique os logs do pipeline.',
     fileReviewHeader: '### 🤖 Claude Review',
     noFeedbackFile: 'Nenhum problema encontrado neste arquivo.',
+    specificationRule: 'Valide se as mudanças atendem à especificação dos Work Items linkados. Preencha "meetsSpecification" (boolean) e "specificationNotes" (string) em cada item do JSON.',
   },
 
   en: {
@@ -135,6 +173,41 @@ General rules:
 - The "line" field is optional but recommended when possible
 - Be objective and constructive in descriptions`,
 
+    perFileSystemWithSpec: `You are a senior code reviewer. Analyze the changes in each file of this Pull Request and respond EXCLUSIVELY with a valid JSON array, with no text before or after.
+
+Response format (JSON array):
+[
+  {
+    "file": "path/to/file.ts",
+    "summary": "Brief summary of changes in this file (1-2 sentences)",
+    "issues": [
+      {
+        "severity": "critical|important|suggestion",
+        "line": 42,
+        "description": "Description of the issue found"
+      }
+    ],
+    "positives": "Positive highlights (or empty string)",
+    "hasFeedback": true,
+    "meetsSpecification": true,
+    "specificationNotes": "Notes about specification adherence (or empty string)"
+  }
+]
+
+Severity rules:
+- critical: Bugs, security vulnerabilities, data loss, exposed sensitive data (passwords, tokens, API keys, credentials, internal IPs)
+- important: Performance issues, questionable logic, missing error handling
+- suggestion: Readability improvements, code patterns, best practices
+
+General rules:
+- Respond ONLY with the JSON array, no markdown fences, no explanatory text
+- If a file has no issues, set hasFeedback to false and issues to empty array
+- Check ALL files (including .md, .json, .yml) for sensitive data
+- The "line" field is optional but recommended when possible
+- Be objective and constructive in descriptions
+- A "SPECIFICATION (Work Items)" section will be provided with title, description and acceptance criteria of linked Work Items. Validate if the code meets the specification and fill "meetsSpecification" (boolean) and "specificationNotes" (string with observations)
+- If meetsSpecification is false, add an issue with severity "important" describing what was not met`,
+
     noChanges: '✅ No code files found to analyze in this PR.',
     diffTooLarge: '⚠️ Diff truncated due to exceeding the configured maximum size.',
     reviewHeader: '## 🤖 Claude PR Review\n\n',
@@ -143,6 +216,7 @@ General rules:
     errorMessage: '❌ Error running automated review. Check pipeline logs.',
     fileReviewHeader: '### 🤖 Claude Review',
     noFeedbackFile: 'No issues found in this file.',
+    specificationRule: 'Validate if the changes meet the specification of linked Work Items. Fill "meetsSpecification" (boolean) and "specificationNotes" (string) in each JSON item.',
   },
 
   es: {
@@ -200,6 +274,41 @@ Reglas generales:
 - El campo "line" es opcional pero recomendado cuando sea posible
 - Sé objetivo y constructivo en las descripciones`,
 
+    perFileSystemWithSpec: `Eres un revisor de código sénior. Analiza los cambios de cada archivo de este Pull Request y responde EXCLUSIVAMENTE con un JSON array válido, sin ningún texto antes o después.
+
+Formato de respuesta (JSON array):
+[
+  {
+    "file": "ruta/del/archivo.ts",
+    "summary": "Breve resumen de los cambios en este archivo (1-2 frases)",
+    "issues": [
+      {
+        "severity": "critical|important|suggestion",
+        "line": 42,
+        "description": "Descripción del problema encontrado"
+      }
+    ],
+    "positives": "Puntos positivos (o string vacío)",
+    "hasFeedback": true,
+    "meetsSpecification": true,
+    "specificationNotes": "Notas sobre adherencia a la especificación (o string vacío)"
+  }
+]
+
+Reglas de severidad:
+- critical: Bugs, vulnerabilidades de seguridad, pérdida de datos, datos sensibles expuestos (contraseñas, tokens, API keys, credenciales, IPs internos)
+- important: Problemas de rendimiento, lógica cuestionable, falta de manejo de errores
+- suggestion: Mejoras de legibilidad, patrones de código, buenas prácticas
+
+Reglas generales:
+- Responde SOLO con el JSON array, sin markdown fences, sin texto explicativo
+- Si un archivo no tiene problemas, define hasFeedback como false e issues como array vacío
+- Verifica TODOS los archivos (incluyendo .md, .json, .yml) en busca de datos sensibles
+- El campo "line" es opcional pero recomendado cuando sea posible
+- Sé objetivo y constructivo en las descripciones
+- Una sección "ESPECIFICACIÓN (Work Items)" será proporcionada con título, descripción y criterios de aceptación de los Work Items vinculados. Valida si el código cumple la especificación y llena "meetsSpecification" (boolean) y "specificationNotes" (string con observaciones)
+- Si meetsSpecification es false, agrega un issue con severity "important" describiendo lo que no se cumplió`,
+
     noChanges: '✅ No se encontraron archivos de código para analizar en este PR.',
     diffTooLarge: '⚠️ Diff truncado por exceder el tamaño máximo configurado.',
     reviewHeader: '## 🤖 Claude PR Review\n\n',
@@ -208,6 +317,7 @@ Reglas generales:
     errorMessage: '❌ Error al ejecutar la revisión automática. Verifique los logs del pipeline.',
     fileReviewHeader: '### 🤖 Claude Review',
     noFeedbackFile: 'No se encontraron problemas en este archivo.',
+    specificationRule: 'Valida si los cambios cumplen la especificación de los Work Items vinculados. Llena "meetsSpecification" (boolean) y "specificationNotes" (string) en cada item del JSON.',
   },
 };
 

@@ -26,6 +26,8 @@ export interface FileReview {
   issues: FileReviewIssue[];
   positives: string;
   hasFeedback: boolean;
+  meetsSpecification?: boolean;
+  specificationNotes?: string;
 }
 
 /**
@@ -167,12 +169,17 @@ export function runReview(
  */
 export function buildStructuredPrompt(
   fileDiffs: Map<string, string>,
-  customPrompt: string
+  customPrompt: string,
+  specificationContext?: string
 ): string {
   let prompt = 'Analise as mudanças de cada arquivo desta Pull Request.\n\n';
 
   for (const [filePath, diff] of fileDiffs) {
     prompt += `===== ARQUIVO: ${filePath} =====\n${diff}\n\n`;
+  }
+
+  if (specificationContext) {
+    prompt += `\n===== ESPECIFICAÇÃO (Work Items) =====\n${specificationContext}\n\n`;
   }
 
   if (customPrompt) {

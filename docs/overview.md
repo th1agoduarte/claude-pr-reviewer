@@ -6,6 +6,9 @@ Extensão para Azure DevOps que analisa Pull Requests automaticamente usando **C
 
 - 🤖 **Review automático de PRs** com Claude Sonnet, Opus ou Haiku
 - 📄 **Comentários por arquivo** — feedback aparece diretamente na aba "Files" da PR
+- 🟢 **Status condicional** — issues críticos/importantes ficam "Active", sugestões ficam "Closed"
+- 🔔 **Notificação no Teams** — envia Adaptive Card com resumo do review via webhook
+- 📋 **Validação de especificação** — valida código contra Work Items linkados (descrição e critérios de aceite)
 - 🗑️ **Limpeza automática** — reviews anteriores são removidos antes de postar novos
 - 🏷️ **Label "AI-Reviewed"** — adicionada automaticamente à PR após o review
 - 🌍 **Multi-idioma**: Português (BR), English, Español
@@ -51,6 +54,7 @@ steps:
       model: 'claude-sonnet-4-5-20250929'
       reviewLanguage: 'pt-br'
       perFileReview: true
+      teamsWebhookUrl: $(TEAMS_WEBHOOK_URL)
     env:
       SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 ```
@@ -74,6 +78,9 @@ O Claude posta comentários **individuais por arquivo** na aba "Files" da PR:
 > - 🔴 **critical** (linha 42): Token JWT sem expiração definida
 > - 🟡 **important** (linha 28): Query SQL sem prepared statement
 
+Comentários com issues 🔴 Críticos ou 🟡 Importantes ficam como **Active** (requerem ação).
+Comentários com apenas 🔵 Sugestões ficam como **Closed** (informativo).
+
 Além disso, um **resumo global** é postado na aba "Overview":
 
 > ## 🤖 Claude PR Review
@@ -88,10 +95,27 @@ Além disso, um **resumo global** é postado na aba "Overview":
 > | **Total** | **4** |
 >
 > Veja os comentários detalhados na aba **Files** desta PR.
+>
+> ### 📋 Validação de Especificação
+> ✅ Todos os arquivos analisados atendem à especificação dos Work Items linkados.
 
 ### Modo Global (legado)
 
 Com `perFileReview: false`, o Claude posta um único comentário com o review completo.
+
+## 🔔 Notificação no Teams
+
+Configure um webhook para receber resumos de review como Adaptive Card no Teams:
+
+1. No Teams: Canal → "..." → "Workflows" → "Post to a channel when a webhook request is received"
+2. Armazene a URL como variável secreta no Azure DevOps (ex: `TEAMS_WEBHOOK_URL`)
+3. Configure na task: `teamsWebhookUrl: $(TEAMS_WEBHOOK_URL)`
+
+Se a variável não estiver configurada, a notificação é simplesmente ignorada.
+
+## 📋 Validação de Especificação (Work Items)
+
+Se a PR tiver Work Items linkados com descrição e/ou critérios de aceite, o Claude automaticamente valida se as mudanças atendem à especificação. Basta linkar os Work Items à PR normalmente.
 
 ## ⚙️ Configurações
 
@@ -102,12 +126,13 @@ Com `perFileReview: false`, o Claude posta um único comentário com o review co
 | `reviewLanguage` | `pt-br`, `en`, `es` | `pt-br` |
 | `fileExtensions` | Extensões a analisar | `ts,js,py,php,vue,cs,...` |
 | `excludePaths` | Caminhos a ignorar | `node_modules,dist,...` |
-| `maxDiffSize` | Max caracteres do diff total | `30000` |
+| `maxDiffSize` | Max caracteres do diff total | `50000` |
 | `maxFileDiffSize` | Max caracteres do diff por arquivo | `10000` |
 | `customPrompt` | Instruções extras | (vazio) |
 | `failOnError` | Falhar pipeline em erro | `false` |
 | `postComment` | Postar na PR | `true` |
 | `perFileReview` | Comentários por arquivo na aba Files | `true` |
+| `teamsWebhookUrl` | URL do webhook do Teams | (vazio) |
 
 ## 🔐 Segurança
 

@@ -2,10 +2,14 @@
 
 Extensão para Azure DevOps que faz review automático de Pull Requests usando **Claude AI** via **subscription** (sem custo extra de API).
 
-## ✨ Novidades v1.1.0
+## ✨ Novidades v2.0.0
 
-- 📄 **Review por arquivo** — comentários aparecem na aba "Files" da PR
-- 🗑️ **Limpeza automática** — reviews anteriores são removidos antes de novos
+- 🔔 **Notificação no Teams** — envia Adaptive Card com resumo do review via webhook
+- 📋 **Validação de especificação** — valida código contra Work Items linkados (descrição e critérios de aceite)
+- 🟢 **Status condicional** — issues críticos/importantes ficam "Active" (requerem ação), sugestões ficam "Closed"
+- 📏 **maxDiffSize aumentado** — padrão de 50.000 caracteres (antes 30.000)
+- 📄 **Review por arquivo** — comentários na aba "Files" da PR (v1.1.0)
+- 🗑️ **Limpeza automática** — reviews anteriores removidos antes de novos
 - 🏷️ **Label "AI-Reviewed"** — adicionada automaticamente à PR
 - 🔒 **Detecção de dados sensíveis** — verifica .md, .json, .yml por senhas/tokens/keys
 
@@ -21,7 +25,7 @@ claude-pr-reviewer/
 │   ├── tsconfig.json           # Config TypeScript
 │   └── src/
 │       ├── index.ts            # Entry point — orquestra tudo
-│       ├── azuredevops.ts      # API do Azure DevOps (diff, comentários)
+│       ├── azuredevops.ts      # API do Azure DevOps (diff, comentários, WI, Teams)
 │       ├── claude-runner.ts    # Instala e executa Claude Code CLI
 │       └── prompts.ts          # Prompts de review (pt-br, en, es)
 ├── docs/
@@ -51,7 +55,7 @@ O script:
 
 ## 📦 Como Publicar
 
-### Opção A: Marketplace privado (recomendado para sua org)
+### Primeira publicação
 
 ```bash
 # 1. Crie um Publisher em https://marketplace.visualstudio.com/manage
@@ -60,7 +64,18 @@ O script:
 tfx extension publish --manifest-globs vss-extension.json --token SEU_PAT
 ```
 
-### Opção B: Upload direto (sem marketplace)
+### Atualizar extensão (versões seguintes)
+
+```bash
+# Via linha de comando (recomendado)
+tfx extension publish --manifest-globs vss-extension.json --token SEU_PAT
+
+# Ou via painel web
+# 1. Organization Settings → Extensions → Browse local extensions
+# 2. Clique na extensão → "Update" → upload do novo .vsix
+```
+
+### Upload direto (sem marketplace)
 
 1. Organization Settings → Extensions → Browse local extensions
 2. Upload do arquivo `.vsix`
@@ -93,7 +108,7 @@ No Azure DevOps:
 
 ## ⚡ Uso no Pipeline
 
-### Review por arquivo (recomendado)
+### Review por arquivo com Teams e Work Items (completo)
 
 ```yaml
 - task: ClaudePRReview@1
@@ -103,9 +118,25 @@ No Azure DevOps:
     model: 'claude-sonnet-4-5-20250929'
     reviewLanguage: 'pt-br'
     perFileReview: true
+    maxDiffSize: '50000'
     maxFileDiffSize: '10000'
     fileExtensions: 'ts,js,py,php,vue,cs,java,go,md,json,yml,yaml'
+    teamsWebhookUrl: $(TEAMS_WEBHOOK_URL)
     customPrompt: 'Foque em segurança e performance'
+  env:
+    SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+```
+
+### Review por arquivo (básico)
+
+```yaml
+- task: ClaudePRReview@1
+  inputs:
+    authMethod: 'subscription'
+    oauthToken: $(CLAUDE_OAUTH_TOKEN)
+    model: 'claude-sonnet-4-5-20250929'
+    reviewLanguage: 'pt-br'
+    perFileReview: true
   env:
     SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 ```
@@ -135,13 +166,42 @@ Veja mais exemplos em `examples/azure-pipelines.yml`.
 | `reviewLanguage` | `pt-br`, `en`, `es` | `pt-br` |
 | `fileExtensions` | Extensões a analisar | `ts,js,tsx,jsx,py,php,vue,cs,...` |
 | `excludePaths` | Caminhos a ignorar | `node_modules,dist,build,vendor,...` |
-| `maxDiffSize` | Max caracteres do diff total | `30000` |
+| `maxDiffSize` | Max caracteres do diff total | `50000` |
 | `maxFileDiffSize` | Max caracteres do diff por arquivo | `10000` |
 | `customPrompt` | Instruções extras para o review | (vazio) |
 | `maxTurns` | Turnos do Claude Code | `1` |
 | `failOnError` | Falhar pipeline em erro | `false` |
 | `postComment` | Postar na PR | `true` |
 | `perFileReview` | Comentários por arquivo (aba Files) | `true` |
+| `teamsWebhookUrl` | URL do webhook do Teams (Adaptive Card) | (vazio) |
+
+## 🔔 Notificação no Teams
+
+Para receber resumos de review no Microsoft Teams:
+
+1. No Teams, crie um **Workflow** (Power Automate) no canal desejado:
+   - Canal → "..." → "Workflows" → "Post to a channel when a webhook request is received"
+   - Copie a URL do webhook gerado
+2. Armazene a URL como variável no Azure DevOps (ex: `TEAMS_WEBHOOK_URL`)
+3. Configure na task: `teamsWebhookUrl: $(TEAMS_WEBHOOK_URL)`
+
+Se a variável não estiver configurada ou estiver vazia, a notificação é simplesmente ignorada (sem erro).
+
+## 📋 Validação de Especificação (Work Items)
+
+Se a PR tiver Work Items linkados com **descrição** e/ou **critérios de aceite**, o Claude automaticamente:
+- Inclui a especificação no contexto do review
+- Valida se as mudanças de código atendem à especificação
+- Reporta no resumo se algum arquivo não atende
+- Adiciona notas de especificação nos comentários por arquivo
+
+Isso funciona automaticamente — basta linkar Work Items à PR normalmente no Azure DevOps.
+
+## 🟢 Status Condicional dos Comentários
+
+Os comentários agora usam status inteligente:
+- **Active** — se o arquivo tem issues 🔴 Críticos ou 🟡 Importantes (requer ação do desenvolvedor)
+- **Closed** — se o arquivo tem apenas 🔵 Sugestões (informativo, não bloqueia)
 
 ## 🧩 Customização
 

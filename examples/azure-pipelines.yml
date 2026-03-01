@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════
-#  Exemplo: Pipeline Azure DevOps com Claude PR Reviewer
+#  Exemplo: Pipeline Azure DevOps com Claude PR Reviewer v2.0
 # ═══════════════════════════════════════════════════════════
 #
 #  Pré-requisitos:
@@ -24,7 +24,7 @@ pool:
   vmImage: 'ubuntu-latest'
 
 variables:
-  - group: 'claude-secrets'  # Variable group com CLAUDE_OAUTH_TOKEN
+  - group: 'claude-secrets'  # Variable group com CLAUDE_OAUTH_TOKEN e TEAMS_WEBHOOK_URL
 
 steps:
   # Checkout com histórico completo (necessário pro diff)
@@ -37,7 +37,7 @@ steps:
       versionSpec: '20.x'
     displayName: 'Setup Node.js 20'
 
-  # ─── Review com Claude ─────────────────────────────────
+  # ─── Review com Claude (completo) ─────────────────────────
   - task: ClaudePRReview@1
     displayName: '🤖 Claude PR Review'
     inputs:
@@ -52,11 +52,14 @@ steps:
       # Filtros
       fileExtensions: 'ts,js,tsx,jsx,py,php,vue,cs,java,go,md,json,yml,yaml'
       excludePaths: 'node_modules,dist,build,vendor,.next,__pycache__,*.test.*,*.spec.*'
-      maxDiffSize: '30000'
+      maxDiffSize: '50000'
       maxFileDiffSize: '10000'
 
       # Review por arquivo (comentários na aba Files da PR)
       perFileReview: true
+
+      # Notificação Teams (opcional — se variável não existir, é ignorado)
+      teamsWebhookUrl: $(TEAMS_WEBHOOK_URL)
 
       # Avançado
       customPrompt: |
@@ -85,17 +88,3 @@ steps:
 #      perFileReview: false    # Posta um único comentário global
 #    env:
 #      SYSTEM_ACCESSTOKEN: $(System.AccessToken)
-
-
-# ═══════════════════════════════════════════════════════════
-#  Variação: Review apenas para PRs grandes (> 10 arquivos)
-# ═══════════════════════════════════════════════════════════
-#
-#  - script: |
-#      FILE_COUNT=$(git diff origin/$(System.PullRequest.TargetBranch)...HEAD --name-only | wc -l)
-#      echo "##vso[task.setvariable variable=fileCount]$FILE_COUNT"
-#    displayName: 'Count changed files'
-#
-#  - task: ClaudePRReview@1
-#    condition: and(succeeded(), gt(variables.fileCount, 10))
-#    ...

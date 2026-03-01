@@ -1,12 +1,14 @@
 /**
- * Claude PR Reviewer — Azure DevOps Extension
+ * Claude PR Reviewer — Azure DevOps Extension v2.0.0
  *
  * Entry point da task. Orquestra:
  *  1. Leitura dos inputs da task
  *  2. Coleta do diff da PR (global ou per-file)
- *  3. Instalação do Claude Code CLI
- *  4. Execução do review
- *  5. Publicação dos comentários na PR (por arquivo ou global)
+ *  3. Coleta de especificações dos Work Items linkados (se houver)
+ *  4. Instalação do Claude Code CLI
+ *  5. Execução do review
+ *  6. Publicação dos comentários na PR (por arquivo ou global)
+ *  7. Notificação no Teams (se configurado)
  */
 
 import * as tl from 'azure-pipelines-task-lib/task';
@@ -20,6 +22,10 @@ import {
   postFileComment,
   deleteExistingComments,
   addLabel,
+  getLinkedWorkItems,
+  getWorkItemDetails,
+  sendTeamsNotification,
+  WorkItemInfo,
 } from './azuredevops';
 import {
   installClaudeCode,
@@ -50,18 +56,19 @@ async function run(): Promise<void> {
       .split(',')
       .map((e) => e.trim())
       .filter(Boolean);
-    const maxDiffSize = parseInt(tl.getInput('maxDiffSize', false) || '30000', 10);
+    const maxDiffSize = parseInt(tl.getInput('maxDiffSize', false) || '50000', 10);
     const maxFileDiffSize = parseInt(tl.getInput('maxFileDiffSize', false) || '10000', 10);
     const customPrompt = tl.getInput('customPrompt', false) || '';
     const maxTurns = parseInt(tl.getInput('maxTurns', false) || '1', 10);
     const failOnError = tl.getBoolInput('failOnError', false);
     const postComment = tl.getBoolInput('postComment', false);
     const perFileReview = tl.getBoolInput('perFileReview', false);
+    const teamsWebhookUrl = tl.getInput('teamsWebhookUrl', false) || '';
 
     const prompt = getPrompt(reviewLanguage);
 
     console.log('═══════════════════════════════════════════');
-    console.log('  🤖 Claude PR Reviewer');
+    console.log('  🤖 Claude PR Reviewer v2.0.0');
     console.log('═══════════════════════════════════════════');
     console.log(`  Modelo:       ${model}`);
     console.log(`  Idioma:       ${reviewLanguage}`);
@@ -71,6 +78,9 @@ async function run(): Promise<void> {
     console.log(`  Max diff:     ${maxDiffSize} chars`);
     if (perFileReview) {
       console.log(`  Max/arquivo:  ${maxFileDiffSize} chars`);
+    }
+    if (teamsWebhookUrl) {
+      console.log('  Teams:        Habilitado');
     }
     console.log('═══════════════════════════════════════════\n');
 
@@ -102,12 +112,12 @@ async function run(): Promise<void> {
     if (perFileReview) {
       await runPerFileReview(
         ctx, claudeOptions, prompt, fileExtensions, excludePaths,
-        maxDiffSize, maxFileDiffSize, customPrompt, model, postComment
+        maxDiffSize, maxFileDiffSize, customPrompt, model, postComment, teamsWebhookUrl
       );
     } else {
       await runGlobalReview(
         ctx, claudeOptions, prompt, fileExtensions, excludePaths,
-        maxDiffSize, customPrompt, model, postComment
+        maxDiffSize, customPrompt, model, postComment, teamsWebhookUrl
       );
     }
 
@@ -131,6 +141,133 @@ async function run(): Promise<void> {
 }
 
 /**
+ * Determina o status da thread com base nas severidades dos issues.
+ * Active (1) se tem critical ou important, Closed (4) se só suggestion.
+ */
+function determineThreadStatus(review: FileReview): number {
+  const hasCriticalOrImportant = review.issues.some(
+    (i) => i.severity === 'critical' || i.severity === 'important'
+  );
+  return hasCriticalOrImportant ? 1 : 4; // 1=Active, 4=Closed
+}
+
+/**
+ * Coleta especificações dos Work Items linkados à PR.
+ * Retorna string formatada com título, descrição e critérios de aceite.
+ * Retorna string vazia se não houver WIs ou se falhar.
+ */
+async function buildSpecificationContext(ctx: AzureDevOpsContext): Promise<string> {
+  console.log('📋 Verificando Work Items linkados...');
+
+  const workItems = await getLinkedWorkItems(ctx);
+  if (workItems.length === 0) {
+    console.log('  Nenhum Work Item linkado à PR.');
+    return '';
+  }
+
+  console.log(`  ${workItems.length} Work Item(s) encontrado(s): ${workItems.map((w) => `#${w.id}`).join(', ')}`);
+
+  const details = await getWorkItemDetails(ctx, workItems.map((w) => w.id));
+  if (details.length === 0) {
+    return '';
+  }
+
+  let context = '';
+  for (const wi of details) {
+    context += `--- Work Item #${wi.id}: ${wi.title} ---\n`;
+    if (wi.description) {
+      context += `Descrição:\n${wi.description}\n\n`;
+    }
+    if (wi.acceptanceCriteria) {
+      context += `Critérios de Aceite:\n${wi.acceptanceCriteria}\n\n`;
+    }
+  }
+
+  if (context) {
+    console.log(`  📄 Especificações coletadas de ${details.length} Work Item(s).\n`);
+  }
+
+  return context;
+}
+
+/**
+ * Monta um Adaptive Card para notificação no Microsoft Teams.
+ */
+function buildTeamsCard(
+  ctx: AzureDevOpsContext,
+  reviews: FileReview[] | null,
+  model: string,
+  reviewText?: string
+): object {
+  const facts: { title: string; value: string }[] = [
+    { title: 'PR', value: `#${ctx.prId}: ${ctx.sourceBranch} → ${ctx.targetBranch}` },
+  ];
+
+  if (reviews) {
+    let critical = 0;
+    let important = 0;
+    let suggestion = 0;
+    let filesWithIssues = 0;
+
+    for (const review of reviews) {
+      if (review.hasFeedback && review.issues.length > 0) {
+        filesWithIssues++;
+        for (const issue of review.issues) {
+          if (issue.severity === 'critical') critical++;
+          else if (issue.severity === 'important') important++;
+          else suggestion++;
+        }
+      }
+    }
+
+    facts.push({ title: 'Arquivos', value: `${reviews.length} analisados, ${filesWithIssues} com feedback` });
+    if (critical > 0) facts.push({ title: '🔴 Crítico', value: String(critical) });
+    if (important > 0) facts.push({ title: '🟡 Importante', value: String(important) });
+    if (suggestion > 0) facts.push({ title: '🔵 Sugestão', value: String(suggestion) });
+  } else if (reviewText) {
+    const lines = reviewText.split('\n').length;
+    facts.push({ title: 'Modo', value: 'Review Global' });
+    facts.push({ title: 'Tamanho', value: `${lines} linhas` });
+  }
+
+  facts.push({ title: 'Modelo', value: model });
+
+  const prUrl = `${ctx.orgUrl}/${encodeURIComponent(ctx.project)}/_git/${encodeURIComponent(ctx.repoId)}/pullrequest/${ctx.prId}`;
+
+  return {
+    type: 'message',
+    attachments: [
+      {
+        contentType: 'application/vnd.microsoft.card.adaptive',
+        content: {
+          type: 'AdaptiveCard',
+          version: '1.4',
+          body: [
+            {
+              type: 'TextBlock',
+              text: '🤖 Claude PR Review',
+              weight: 'Bolder',
+              size: 'Medium',
+            },
+            {
+              type: 'FactSet',
+              facts,
+            },
+          ],
+          actions: [
+            {
+              type: 'Action.OpenUrl',
+              title: 'Ver PR',
+              url: prUrl,
+            },
+          ],
+        },
+      },
+    ],
+  };
+}
+
+/**
  * Modo per-file: coleta diff por arquivo, uma chamada ao Claude com JSON estruturado,
  * posta comentários individuais na aba "Files" da PR.
  */
@@ -144,7 +281,8 @@ async function runPerFileReview(
   maxFileDiffSize: number,
   customPrompt: string,
   model: string,
-  postComment: boolean
+  postComment: boolean,
+  teamsWebhookUrl: string
 ): Promise<void> {
   // 1. Listar arquivos alterados
   console.log('📂 Listando arquivos alterados...');
@@ -185,14 +323,19 @@ async function runPerFileReview(
 
   console.log(`📊 Diffs coletados: ${fileDiffs.size} arquivo(s), ${totalSize} caracteres total\n`);
 
-  // 3. Montar prompt e chamar Claude (uma única chamada)
-  const structuredPrompt = buildStructuredPrompt(fileDiffs, customPrompt);
-  const rawReview = runReview(structuredPrompt, prompt.perFileSystem, '', options);
+  // 3. Coletar especificações dos Work Items (se houver)
+  const specificationContext = await buildSpecificationContext(ctx);
+  const hasSpec = specificationContext.length > 0;
+
+  // 4. Montar prompt e chamar Claude (uma única chamada)
+  const structuredPrompt = buildStructuredPrompt(fileDiffs, customPrompt, specificationContext || undefined);
+  const systemPrompt = hasSpec ? prompt.perFileSystemWithSpec : prompt.perFileSystem;
+  const rawReview = runReview(structuredPrompt, systemPrompt, '', options);
 
   // Salva o review como variável de saída
   tl.setVariable('ClaudeReviewOutput', rawReview, false, true);
 
-  // 4. Parsear resposta JSON
+  // 5. Parsear resposta JSON
   const fileReviews = parseFileReviews(rawReview);
 
   if (!fileReviews) {
@@ -220,28 +363,36 @@ async function runPerFileReview(
     return;
   }
 
-  // 5. Limpar reviews anteriores
+  // 6. Limpar reviews anteriores
   console.log('🗑️ Limpando reviews anteriores...');
   await deleteExistingComments(ctx, REVIEW_MARKER);
 
-  // 6. Postar comentários por arquivo
+  // 7. Postar comentários por arquivo com status condicional
   console.log('\n💬 Postando reviews por arquivo...');
   let filesWithFeedback = 0;
 
   for (const review of fileReviews) {
     if (review.hasFeedback && review.issues.length > 0) {
       const markdown = formatFileReviewAsMarkdown(review, REVIEW_MARKER);
-      await postFileComment(ctx, review.file, markdown);
+      const status = determineThreadStatus(review);
+      await postFileComment(ctx, review.file, markdown, status);
       filesWithFeedback++;
     }
   }
 
-  // 7. Postar resumo global
-  const summaryComment = buildSummaryComment(fileReviews, model, prompt);
+  // 8. Postar resumo global
+  const summaryComment = buildSummaryComment(fileReviews, model, prompt, hasSpec);
   await postPRComment(ctx, summaryComment);
 
-  // 8. Adicionar label
+  // 9. Adicionar label
   await addLabel(ctx, 'AI-Reviewed');
+
+  // 10. Notificar Teams (se configurado)
+  if (teamsWebhookUrl) {
+    console.log('\n📨 Enviando notificação para o Teams...');
+    const card = buildTeamsCard(ctx, fileReviews, model);
+    await sendTeamsNotification(teamsWebhookUrl, card);
+  }
 
   console.log(`\n✅ Review per-file concluído: ${filesWithFeedback} arquivo(s) com feedback.`);
 }
@@ -258,7 +409,8 @@ async function runGlobalReview(
   maxDiffSize: number,
   customPrompt: string,
   model: string,
-  postComment: boolean
+  postComment: boolean,
+  teamsWebhookUrl: string
 ): Promise<void> {
   console.log('📂 Coletando diff dos arquivos alterados...');
   let diff = getLocalDiff(ctx.targetBranch, fileExtensions, excludePaths, maxDiffSize);
@@ -292,6 +444,13 @@ async function runGlobalReview(
   }
 
   tl.setVariable('ClaudeReviewOutput', reviewText, false, true);
+
+  // Notificar Teams (se configurado)
+  if (teamsWebhookUrl) {
+    console.log('\n📨 Enviando notificação para o Teams...');
+    const card = buildTeamsCard(ctx, null, model, reviewText);
+    await sendTeamsNotification(teamsWebhookUrl, card);
+  }
 }
 
 /**
@@ -300,12 +459,14 @@ async function runGlobalReview(
 function buildSummaryComment(
   reviews: FileReview[],
   model: string,
-  prompt: ReviewPrompt
+  prompt: ReviewPrompt,
+  hasSpecification: boolean = false
 ): string {
   let critical = 0;
   let important = 0;
   let suggestion = 0;
   let filesWithIssues = 0;
+  let specNotMet = 0;
 
   for (const review of reviews) {
     if (review.hasFeedback && review.issues.length > 0) {
@@ -315,6 +476,9 @@ function buildSummaryComment(
         else if (issue.severity === 'important') important++;
         else suggestion++;
       }
+    }
+    if (hasSpecification && review.meetsSpecification === false) {
+      specNotMet++;
     }
   }
 
@@ -334,6 +498,15 @@ function buildSummaryComment(
     md += 'Veja os comentários detalhados na aba **Files** desta PR.\n';
   } else {
     md += '✅ Nenhum problema encontrado nos arquivos analisados.\n';
+  }
+
+  if (hasSpecification) {
+    md += '\n### 📋 Validação de Especificação\n\n';
+    if (specNotMet > 0) {
+      md += `⚠️ **${specNotMet}** arquivo(s) não atendem completamente à especificação dos Work Items. Veja os comentários por arquivo para detalhes.\n`;
+    } else {
+      md += '✅ Todos os arquivos analisados atendem à especificação dos Work Items linkados.\n';
+    }
   }
 
   md += prompt.reviewFooter(model);
