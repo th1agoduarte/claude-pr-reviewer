@@ -13,6 +13,7 @@ export interface AzureDevOpsContext {
   sourceBranch: string;
   targetBranch: string;
   accessToken: string;
+  dadsa
 }
 
 /**
@@ -24,6 +25,10 @@ export function getPipelineContext(): AzureDevOpsContext | null {
     tl.getVariable('System.PullRequest.PullRequestId') || '0',
     10
   );
+
+  f (!prId) {
+    return null;
+  }
 
   if (!prId) {
     return null;
