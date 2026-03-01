@@ -30,6 +30,9 @@ if (!prId) {
   if (!prId) {
     return null;
   }
+  if (!prId) {
+    return null;
+  }
 
   const orgUrl = tl.getVariable('System.CollectionUri') || '';
   const project = tl.getVariable('System.TeamProject') || '';
