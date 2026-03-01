@@ -3,16 +3,36 @@
  *
  * Entry point da task. Orquestra:
  *  1. Leitura dos inputs da task
- *  2. Coleta do diff da PR
+ *  2. Coleta do diff da PR (global ou per-file)
  *  3. Instalação do Claude Code CLI
  *  4. Execução do review
- *  5. Publicação do comentário na PR
+ *  5. Publicação dos comentários na PR (por arquivo ou global)
  */
 
 import * as tl from 'azure-pipelines-task-lib/task';
-import { getPipelineContext, getLocalDiff, postPRComment } from './azuredevops';
-import { installClaudeCode, runReview, ClaudeCodeOptions } from './claude-runner';
-import { getPrompt } from './prompts';
+import {
+  AzureDevOpsContext,
+  getPipelineContext,
+  getLocalDiff,
+  getChangedFiles,
+  getFileDiff,
+  postPRComment,
+  postFileComment,
+  deleteExistingComments,
+  addLabel,
+} from './azuredevops';
+import {
+  installClaudeCode,
+  runReview,
+  buildStructuredPrompt,
+  parseFileReviews,
+  formatFileReviewAsMarkdown,
+  FileReview,
+  ClaudeCodeOptions,
+} from './claude-runner';
+import { getPrompt, ReviewPrompt } from './prompts';
+
+const REVIEW_MARKER = '<!-- claude-pr-review -->';
 
 async function run(): Promise<void> {
   try {
@@ -31,21 +51,27 @@ async function run(): Promise<void> {
       .map((e) => e.trim())
       .filter(Boolean);
     const maxDiffSize = parseInt(tl.getInput('maxDiffSize', false) || '30000', 10);
+    const maxFileDiffSize = parseInt(tl.getInput('maxFileDiffSize', false) || '10000', 10);
     const customPrompt = tl.getInput('customPrompt', false) || '';
     const maxTurns = parseInt(tl.getInput('maxTurns', false) || '1', 10);
     const failOnError = tl.getBoolInput('failOnError', false);
     const postComment = tl.getBoolInput('postComment', false);
+    const perFileReview = tl.getBoolInput('perFileReview', false);
 
     const prompt = getPrompt(reviewLanguage);
 
     console.log('═══════════════════════════════════════════');
     console.log('  🤖 Claude PR Reviewer');
     console.log('═══════════════════════════════════════════');
-    console.log(`  Modelo:     ${model}`);
-    console.log(`  Idioma:     ${reviewLanguage}`);
-    console.log(`  Auth:       ${authMethod}`);
-    console.log(`  Extensões:  ${fileExtensions.join(', ')}`);
-    console.log(`  Max diff:   ${maxDiffSize} chars`);
+    console.log(`  Modelo:       ${model}`);
+    console.log(`  Idioma:       ${reviewLanguage}`);
+    console.log(`  Auth:         ${authMethod}`);
+    console.log(`  Modo:         ${perFileReview ? 'Per-file' : 'Global'}`);
+    console.log(`  Extensões:    ${fileExtensions.join(', ')}`);
+    console.log(`  Max diff:     ${maxDiffSize} chars`);
+    if (perFileReview) {
+      console.log(`  Max/arquivo:  ${maxFileDiffSize} chars`);
+    }
     console.log('═══════════════════════════════════════════\n');
 
     // ─── 2. Contexto da PR ──────────────────────────────────
@@ -61,28 +87,7 @@ async function run(): Promise<void> {
 
     console.log(`📋 PR #${ctx.prId}: ${ctx.sourceBranch} → ${ctx.targetBranch}\n`);
 
-    // ─── 3. Coletar diff ────────────────────────────────────
-    console.log('📂 Coletando diff dos arquivos alterados...');
-    let diff = getLocalDiff(ctx.targetBranch, fileExtensions, excludePaths, maxDiffSize);
-
-    if (!diff || diff.trim().length === 0) {
-      console.log(prompt.noChanges);
-      if (postComment) {
-        await postPRComment(ctx, prompt.reviewHeader + prompt.noChanges + prompt.reviewFooter(model));
-      }
-      tl.setResult(tl.TaskResult.Succeeded, prompt.noChanges);
-      return;
-    }
-
-    // Verifica se foi truncado
-    if (diff.length >= maxDiffSize) {
-      console.log(prompt.diffTooLarge);
-      diff += `\n\n[${prompt.diffTooLarge}]`;
-    }
-
-    console.log(`📊 Diff coletado: ${diff.length} caracteres\n`);
-
-    // ─── 4. Instalar e rodar Claude Code ────────────────────
+    // ─── 3. Instalar Claude Code ──────────────────────────────
     installClaudeCode();
 
     const claudeOptions: ClaudeCodeOptions = {
@@ -93,24 +98,18 @@ async function run(): Promise<void> {
       maxTurns,
     };
 
-    const reviewText = runReview(diff, prompt.system, customPrompt, claudeOptions);
-
-    // ─── 5. Postar na PR ────────────────────────────────────
-    const fullComment =
-      prompt.reviewHeader + reviewText + prompt.reviewFooter(model);
-
-    if (postComment) {
-      console.log('\n💬 Postando review na PR...');
-      await postPRComment(ctx, fullComment);
+    // ─── 4. Executar review ──────────────────────────────────
+    if (perFileReview) {
+      await runPerFileReview(
+        ctx, claudeOptions, prompt, fileExtensions, excludePaths,
+        maxDiffSize, maxFileDiffSize, customPrompt, model, postComment
+      );
     } else {
-      console.log('\n📝 Review gerado (postComment desabilitado):');
-      console.log('─'.repeat(50));
-      console.log(reviewText);
-      console.log('─'.repeat(50));
+      await runGlobalReview(
+        ctx, claudeOptions, prompt, fileExtensions, excludePaths,
+        maxDiffSize, customPrompt, model, postComment
+      );
     }
-
-    // Salva o review como variável de saída para uso posterior no pipeline
-    tl.setVariable('ClaudeReviewOutput', reviewText, false, true);
 
     tl.setResult(tl.TaskResult.Succeeded, 'Review concluído com sucesso! 🎉');
   } catch (err: any) {
@@ -129,6 +128,216 @@ async function run(): Promise<void> {
       );
     }
   }
+}
+
+/**
+ * Modo per-file: coleta diff por arquivo, uma chamada ao Claude com JSON estruturado,
+ * posta comentários individuais na aba "Files" da PR.
+ */
+async function runPerFileReview(
+  ctx: AzureDevOpsContext,
+  options: ClaudeCodeOptions,
+  prompt: ReviewPrompt,
+  fileExtensions: string[],
+  excludePaths: string[],
+  maxDiffSize: number,
+  maxFileDiffSize: number,
+  customPrompt: string,
+  model: string,
+  postComment: boolean
+): Promise<void> {
+  // 1. Listar arquivos alterados
+  console.log('📂 Listando arquivos alterados...');
+  const files = getChangedFiles(ctx.targetBranch, fileExtensions, excludePaths);
+
+  if (files.length === 0) {
+    console.log(prompt.noChanges);
+    if (postComment) {
+      await postPRComment(ctx, REVIEW_MARKER + '\n' + prompt.reviewHeader + prompt.noChanges + prompt.reviewFooter(model));
+    }
+    return;
+  }
+
+  console.log(`📊 ${files.length} arquivo(s) alterado(s): ${files.join(', ')}\n`);
+
+  // 2. Coletar diff de cada arquivo
+  console.log('📂 Coletando diffs por arquivo...');
+  const fileDiffs = new Map<string, string>();
+  let totalSize = 0;
+
+  for (const file of files) {
+    if (totalSize >= maxDiffSize) {
+      console.log(`⚠️ Limite total de diff atingido (${maxDiffSize} chars). Arquivos restantes ignorados.`);
+      break;
+    }
+
+    const diff = getFileDiff(ctx.targetBranch, file, maxFileDiffSize);
+    if (diff && diff.trim().length > 0) {
+      fileDiffs.set(file, diff);
+      totalSize += diff.length;
+    }
+  }
+
+  if (fileDiffs.size === 0) {
+    console.log(prompt.noChanges);
+    return;
+  }
+
+  console.log(`📊 Diffs coletados: ${fileDiffs.size} arquivo(s), ${totalSize} caracteres total\n`);
+
+  // 3. Montar prompt e chamar Claude (uma única chamada)
+  const structuredPrompt = buildStructuredPrompt(fileDiffs, customPrompt);
+  const rawReview = runReview(structuredPrompt, prompt.perFileSystem, '', options);
+
+  // Salva o review como variável de saída
+  tl.setVariable('ClaudeReviewOutput', rawReview, false, true);
+
+  // 4. Parsear resposta JSON
+  const fileReviews = parseFileReviews(rawReview);
+
+  if (!fileReviews) {
+    // Fallback: postar como comentário global
+    console.log('⚠️ Fallback: postando review como comentário global...');
+    if (postComment) {
+      const fullComment = REVIEW_MARKER + '\n' + prompt.reviewHeader + rawReview + prompt.reviewFooter(model);
+      await postPRComment(ctx, fullComment);
+    }
+    return;
+  }
+
+  console.log(`✅ JSON parseado: ${fileReviews.length} arquivo(s) analisado(s)\n`);
+
+  if (!postComment) {
+    console.log('📝 Review gerado (postComment desabilitado):');
+    console.log('─'.repeat(50));
+    for (const review of fileReviews) {
+      if (review.hasFeedback) {
+        console.log(`\n📄 ${review.file}:`);
+        console.log(formatFileReviewAsMarkdown(review, REVIEW_MARKER));
+      }
+    }
+    console.log('─'.repeat(50));
+    return;
+  }
+
+  // 5. Limpar reviews anteriores
+  console.log('🗑️ Limpando reviews anteriores...');
+  await deleteExistingComments(ctx, REVIEW_MARKER);
+
+  // 6. Postar comentários por arquivo
+  console.log('\n💬 Postando reviews por arquivo...');
+  let filesWithFeedback = 0;
+
+  for (const review of fileReviews) {
+    if (review.hasFeedback && review.issues.length > 0) {
+      const markdown = formatFileReviewAsMarkdown(review, REVIEW_MARKER);
+      await postFileComment(ctx, review.file, markdown);
+      filesWithFeedback++;
+    }
+  }
+
+  // 7. Postar resumo global
+  const summaryComment = buildSummaryComment(fileReviews, model, prompt);
+  await postPRComment(ctx, summaryComment);
+
+  // 8. Adicionar label
+  await addLabel(ctx, 'AI-Reviewed');
+
+  console.log(`\n✅ Review per-file concluído: ${filesWithFeedback} arquivo(s) com feedback.`);
+}
+
+/**
+ * Modo global (legado): coleta diff único, uma chamada ao Claude, posta um comentário global.
+ */
+async function runGlobalReview(
+  ctx: AzureDevOpsContext,
+  options: ClaudeCodeOptions,
+  prompt: ReviewPrompt,
+  fileExtensions: string[],
+  excludePaths: string[],
+  maxDiffSize: number,
+  customPrompt: string,
+  model: string,
+  postComment: boolean
+): Promise<void> {
+  console.log('📂 Coletando diff dos arquivos alterados...');
+  let diff = getLocalDiff(ctx.targetBranch, fileExtensions, excludePaths, maxDiffSize);
+
+  if (!diff || diff.trim().length === 0) {
+    console.log(prompt.noChanges);
+    if (postComment) {
+      await postPRComment(ctx, prompt.reviewHeader + prompt.noChanges + prompt.reviewFooter(model));
+    }
+    return;
+  }
+
+  if (diff.length >= maxDiffSize) {
+    console.log(prompt.diffTooLarge);
+    diff += `\n\n[${prompt.diffTooLarge}]`;
+  }
+
+  console.log(`📊 Diff coletado: ${diff.length} caracteres\n`);
+
+  const reviewText = runReview(diff, prompt.system, customPrompt, options);
+  const fullComment = prompt.reviewHeader + reviewText + prompt.reviewFooter(model);
+
+  if (postComment) {
+    console.log('\n💬 Postando review na PR...');
+    await postPRComment(ctx, fullComment);
+  } else {
+    console.log('\n📝 Review gerado (postComment desabilitado):');
+    console.log('─'.repeat(50));
+    console.log(reviewText);
+    console.log('─'.repeat(50));
+  }
+
+  tl.setVariable('ClaudeReviewOutput', reviewText, false, true);
+}
+
+/**
+ * Monta o comentário de resumo global com tabela de severidades.
+ */
+function buildSummaryComment(
+  reviews: FileReview[],
+  model: string,
+  prompt: ReviewPrompt
+): string {
+  let critical = 0;
+  let important = 0;
+  let suggestion = 0;
+  let filesWithIssues = 0;
+
+  for (const review of reviews) {
+    if (review.hasFeedback && review.issues.length > 0) {
+      filesWithIssues++;
+      for (const issue of review.issues) {
+        if (issue.severity === 'critical') critical++;
+        else if (issue.severity === 'important') important++;
+        else suggestion++;
+      }
+    }
+  }
+
+  const totalIssues = critical + important + suggestion;
+
+  let md = REVIEW_MARKER + '\n';
+  md += prompt.reviewHeader;
+  md += `**${reviews.length}** arquivo(s) analisado(s), **${filesWithIssues}** com feedback.\n\n`;
+
+  if (totalIssues > 0) {
+    md += '| Severidade | Quantidade |\n';
+    md += '|------------|------------|\n';
+    if (critical > 0) md += `| 🔴 Crítico | ${critical} |\n`;
+    if (important > 0) md += `| 🟡 Importante | ${important} |\n`;
+    if (suggestion > 0) md += `| 🔵 Sugestão | ${suggestion} |\n`;
+    md += `| **Total** | **${totalIssues}** |\n\n`;
+    md += 'Veja os comentários detalhados na aba **Files** desta PR.\n';
+  } else {
+    md += '✅ Nenhum problema encontrado nos arquivos analisados.\n';
+  }
+
+  md += prompt.reviewFooter(model);
+  return md;
 }
 
 run();

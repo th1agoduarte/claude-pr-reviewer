@@ -2,6 +2,13 @@
 
 Extensão para Azure DevOps que faz review automático de Pull Requests usando **Claude AI** via **subscription** (sem custo extra de API).
 
+## ✨ Novidades v1.1.0
+
+- 📄 **Review por arquivo** — comentários aparecem na aba "Files" da PR
+- 🗑️ **Limpeza automática** — reviews anteriores são removidos antes de novos
+- 🏷️ **Label "AI-Reviewed"** — adicionada automaticamente à PR
+- 🔒 **Detecção de dados sensíveis** — verifica .md, .json, .yml por senhas/tokens/keys
+
 ## 📁 Estrutura do Projeto
 
 ```
@@ -86,6 +93,8 @@ No Azure DevOps:
 
 ## ⚡ Uso no Pipeline
 
+### Review por arquivo (recomendado)
+
 ```yaml
 - task: ClaudePRReview@1
   inputs:
@@ -93,13 +102,46 @@ No Azure DevOps:
     oauthToken: $(CLAUDE_OAUTH_TOKEN)
     model: 'claude-sonnet-4-5-20250929'
     reviewLanguage: 'pt-br'
-    fileExtensions: 'ts,js,py,php,vue'
+    perFileReview: true
+    maxFileDiffSize: '10000'
+    fileExtensions: 'ts,js,py,php,vue,cs,java,go,md,json,yml,yaml'
     customPrompt: 'Foque em segurança e performance'
   env:
     SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 ```
 
+### Review global (modo legado)
+
+```yaml
+- task: ClaudePRReview@1
+  inputs:
+    authMethod: 'subscription'
+    oauthToken: $(CLAUDE_OAUTH_TOKEN)
+    model: 'claude-sonnet-4-5-20250929'
+    reviewLanguage: 'pt-br'
+    perFileReview: false
+  env:
+    SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+```
+
 Veja mais exemplos em `examples/azure-pipelines.yml`.
+
+## ⚙️ Configurações
+
+| Input | Descrição | Padrão |
+|-------|-----------|--------|
+| `authMethod` | `subscription` ou `apikey` | `subscription` |
+| `model` | Modelo Claude (Sonnet, Opus, Haiku) | `claude-sonnet-4-5-20250929` |
+| `reviewLanguage` | `pt-br`, `en`, `es` | `pt-br` |
+| `fileExtensions` | Extensões a analisar | `ts,js,tsx,jsx,py,php,vue,cs,...` |
+| `excludePaths` | Caminhos a ignorar | `node_modules,dist,build,vendor,...` |
+| `maxDiffSize` | Max caracteres do diff total | `30000` |
+| `maxFileDiffSize` | Max caracteres do diff por arquivo | `10000` |
+| `customPrompt` | Instruções extras para o review | (vazio) |
+| `maxTurns` | Turnos do Claude Code | `1` |
+| `failOnError` | Falhar pipeline em erro | `false` |
+| `postComment` | Postar na PR | `true` |
+| `perFileReview` | Comentários por arquivo (aba Files) | `true` |
 
 ## 🧩 Customização
 
@@ -107,7 +149,8 @@ Veja mais exemplos em `examples/azure-pipelines.yml`.
 - **Filtros**: Configure extensões e exclusões diretamente na task
 - **Prompt**: Use `customPrompt` para regras específicas do time
 - **Modelo**: Sonnet (equilíbrio), Opus (melhor qualidade), Haiku (mais rápido)
+- **Per-file vs Global**: Use `perFileReview: true` para feedback na aba Files
 
 ## 📝 Licença
-password:1234579
+
 MIT

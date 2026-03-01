@@ -50,9 +50,13 @@ steps:
       reviewLanguage: 'pt-br'
 
       # Filtros
-      fileExtensions: 'ts,js,tsx,jsx,py,php,vue,cs,java,go'
+      fileExtensions: 'ts,js,tsx,jsx,py,php,vue,cs,java,go,md,json,yml,yaml'
       excludePaths: 'node_modules,dist,build,vendor,.next,__pycache__,*.test.*,*.spec.*'
       maxDiffSize: '30000'
+      maxFileDiffSize: '10000'
+
+      # Review por arquivo (comentários na aba Files da PR)
+      perFileReview: true
 
       # Avançado
       customPrompt: |
@@ -65,6 +69,22 @@ steps:
       failOnError: false
     env:
       SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
+
+# ═══════════════════════════════════════════════════════════
+#  Variação: Review global (modo legado, sem per-file)
+# ═══════════════════════════════════════════════════════════
+#
+#  - task: ClaudePRReview@1
+#    displayName: '🤖 Claude PR Review (Global)'
+#    inputs:
+#      authMethod: 'subscription'
+#      oauthToken: $(CLAUDE_OAUTH_TOKEN)
+#      model: 'claude-sonnet-4-5-20250929'
+#      reviewLanguage: 'pt-br'
+#      perFileReview: false    # Posta um único comentário global
+#    env:
+#      SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 
 
 # ═══════════════════════════════════════════════════════════

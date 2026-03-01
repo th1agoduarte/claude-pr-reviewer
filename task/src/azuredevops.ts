@@ -24,9 +24,6 @@ export function getPipelineContext(): AzureDevOpsContext | null {
     tl.getVariable('System.PullRequest.PullRequestId') || '0',
     10
   );
-if (!prId) {
-    return null;
-  }
   if (!prId) {
     return null;
   }
@@ -180,5 +177,184 @@ export async function postPRComment(
       `Erro ao postar comentário na PR (HTTP ${status}): ${msg}. ` +
         `Verifique se o Build Service tem permissão "Contribute to pull requests".`
     );
+  }
+}
+
+/**
+ * Lista os arquivos alterados na PR via git diff --name-only.
+ */
+export function getChangedFiles(
+  targetBranch: string,
+  fileExtensions: string[],
+  excludePaths: string[]
+): string[] {
+  const target = resolveTargetBranch(targetBranch);
+
+  // Fetch não-fatal
+  try {
+    tl.execSync('git', `fetch origin ${target} --depth=1`);
+  } catch {
+    console.log(`Aviso: Falha ao fazer fetch de origin/${target}. Continuando com refs locais...`);
+  }
+
+  const args: string[] = [
+    'diff',
+    '--name-only',
+    '--diff-filter=AM',
+    `origin/${target}...HEAD`,
+    '--',
+  ];
+
+  for (const ext of fileExtensions) {
+    args.push(`*.${ext.trim()}`);
+  }
+
+  for (const p of excludePaths) {
+    args.push(`:(exclude)${p.trim()}/**`);
+  }
+
+  try {
+    const result = tl.execSync('git', args.join(' '));
+    const files = (result.stdout || '')
+      .split('\n')
+      .map((f) => f.trim())
+      .filter(Boolean);
+    return files;
+  } catch (err: any) {
+    tl.warning(`Erro ao listar arquivos alterados: ${err.message}`);
+    return [];
+  }
+}
+
+/**
+ * Obtém o diff de um arquivo específico.
+ */
+export function getFileDiff(
+  targetBranch: string,
+  filePath: string,
+  maxSize: number
+): string {
+  const target = resolveTargetBranch(targetBranch);
+
+  const args = [
+    'diff',
+    `origin/${target}...HEAD`,
+    '--no-color',
+    '--unified=3',
+    '--',
+    filePath,
+  ];
+
+  try {
+    const result = tl.execSync('git', args.join(' '));
+    let diff = result.stdout || '';
+
+    if (diff.length > maxSize) {
+      tl.warning(`Diff de ${filePath} truncado de ${diff.length} para ${maxSize} caracteres.`);
+      diff = diff.substring(0, maxSize);
+    }
+
+    return diff;
+  } catch (err: any) {
+    tl.warning(`Erro ao obter diff de ${filePath}: ${err.message}`);
+    return '';
+  }
+}
+
+/**
+ * Posta um comentário vinculado a um arquivo específico na PR.
+ * Usa threadContext com filePath para aparecer na aba "Files".
+ */
+export async function postFileComment(
+  ctx: AzureDevOpsContext,
+  filePath: string,
+  content: string
+): Promise<void> {
+  const client = createClient(ctx);
+
+  const payload = {
+    comments: [
+      {
+        parentCommentId: 0,
+        content,
+        commentType: 1,
+      },
+    ],
+    threadContext: {
+      filePath: `/${filePath}`,
+    },
+    status: 4, // Closed (informativo)
+  };
+
+  const url = `/git/repositories/${ctx.repoId}/pullRequests/${ctx.prId}/threads`;
+
+  try {
+    await client.post(url, payload);
+    console.log(`  ✅ Comentário postado em ${filePath}`);
+  } catch (err: any) {
+    const status = err.response?.status;
+    const msg = err.response?.data?.message || err.message;
+    tl.warning(`Erro ao postar comentário em ${filePath} (HTTP ${status}): ${msg}`);
+  }
+}
+
+/**
+ * Deleta threads de review anteriores identificadas pelo marcador HTML.
+ */
+export async function deleteExistingComments(
+  ctx: AzureDevOpsContext,
+  marker: string
+): Promise<void> {
+  const client = createClient(ctx);
+  const url = `/git/repositories/${ctx.repoId}/pullRequests/${ctx.prId}/threads`;
+
+  try {
+    const response = await client.get(url);
+    const threads = response.data?.value || [];
+
+    let deleted = 0;
+    for (const thread of threads) {
+      const firstComment = thread.comments?.[0];
+      if (firstComment?.content?.includes(marker)) {
+        try {
+          // Deleta todos os comentários da thread
+          for (const comment of thread.comments) {
+            await client.delete(`${url}/${thread.id}/comments/${comment.id}`);
+          }
+          deleted++;
+        } catch (err: any) {
+          tl.debug(`Não foi possível deletar thread ${thread.id}: ${err.message}`);
+        }
+      }
+    }
+
+    if (deleted > 0) {
+      console.log(`🗑️ ${deleted} review(s) anterior(es) removido(s).`);
+    }
+  } catch (err: any) {
+    tl.warning(`Aviso: Não foi possível limpar reviews anteriores: ${err.message}`);
+  }
+}
+
+/**
+ * Adiciona uma label à PR.
+ */
+export async function addLabel(
+  ctx: AzureDevOpsContext,
+  labelName: string
+): Promise<void> {
+  const client = createClient(ctx);
+  const url = `/git/repositories/${ctx.repoId}/pullRequests/${ctx.prId}/labels`;
+
+  try {
+    await client.post(url, { name: labelName });
+    console.log(`🏷️ Label "${labelName}" adicionada à PR.`);
+  } catch (err: any) {
+    // 409 = label já existe, ignora
+    if (err.response?.status === 409) {
+      tl.debug(`Label "${labelName}" já existe na PR.`);
+    } else {
+      tl.warning(`Aviso: Não foi possível adicionar label "${labelName}": ${err.message}`);
+    }
   }
 }

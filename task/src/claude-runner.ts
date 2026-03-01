@@ -14,6 +14,20 @@ export interface ClaudeCodeOptions {
   maxTurns: number;
 }
 
+export interface FileReviewIssue {
+  severity: 'critical' | 'important' | 'suggestion';
+  line?: number;
+  description: string;
+}
+
+export interface FileReview {
+  file: string;
+  summary: string;
+  issues: FileReviewIssue[];
+  positives: string;
+  hasFeedback: boolean;
+}
+
 /**
  * Instala o Claude Code CLI globalmente via npm.
  */
@@ -146,4 +160,95 @@ export function runReview(
     }
     throw new Error(`Erro ao executar Claude Code: ${err.message}`);
   }
+}
+
+/**
+ * Monta o prompt estruturado com delimitadores por arquivo para o modo per-file.
+ */
+export function buildStructuredPrompt(
+  fileDiffs: Map<string, string>,
+  customPrompt: string
+): string {
+  let prompt = 'Analise as mudanças de cada arquivo desta Pull Request.\n\n';
+
+  for (const [filePath, diff] of fileDiffs) {
+    prompt += `===== ARQUIVO: ${filePath} =====\n${diff}\n\n`;
+  }
+
+  if (customPrompt) {
+    prompt += `\nInstruções adicionais do time:\n${customPrompt}\n`;
+  }
+
+  return prompt;
+}
+
+/**
+ * Extrai e parseia o JSON array da resposta do Claude.
+ * Lida com markdown fences e texto extra ao redor do JSON.
+ */
+export function parseFileReviews(rawResponse: string): FileReview[] | null {
+  try {
+    // Tenta parse direto
+    const parsed = JSON.parse(rawResponse.trim());
+    if (Array.isArray(parsed)) return parsed;
+  } catch {
+    // Não é JSON puro, tenta extrair
+  }
+
+  // Remove markdown fences (```json ... ``` ou ``` ... ```)
+  const fenceMatch = rawResponse.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+  if (fenceMatch) {
+    try {
+      const parsed = JSON.parse(fenceMatch[1].trim());
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      // Continua tentando
+    }
+  }
+
+  // Tenta encontrar o array JSON na resposta (primeiro [ até último ])
+  const firstBracket = rawResponse.indexOf('[');
+  const lastBracket = rawResponse.lastIndexOf(']');
+  if (firstBracket !== -1 && lastBracket > firstBracket) {
+    try {
+      const jsonStr = rawResponse.substring(firstBracket, lastBracket + 1);
+      const parsed = JSON.parse(jsonStr);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      // Parse falhou
+    }
+  }
+
+  console.log('⚠️ Não foi possível extrair JSON da resposta do Claude. Usando fallback global.');
+  return null;
+}
+
+/**
+ * Converte um FileReview em markdown formatado para postar como comentário.
+ */
+export function formatFileReviewAsMarkdown(review: FileReview, marker: string): string {
+  const severityEmoji: Record<string, string> = {
+    critical: '🔴',
+    important: '🟡',
+    suggestion: '🔵',
+  };
+
+  let md = `${marker}\n### 🤖 Claude Review\n\n`;
+  md += `**Resumo:** ${review.summary}\n\n`;
+
+  if (review.issues.length > 0) {
+    md += '**Problemas:**\n\n';
+    for (const issue of review.issues) {
+      const emoji = severityEmoji[issue.severity] || '⚪';
+      const lineRef = issue.line ? ` (linha ${issue.line})` : '';
+      md += `- ${emoji} **${issue.severity}**${lineRef}: ${issue.description}\n`;
+    }
+    md += '\n';
+  }
+
+  if (review.positives) {
+    md += `**Pontos positivos:** ${review.positives}\n`;
+  }
+
+  return md;
 }
