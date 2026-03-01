@@ -24,7 +24,9 @@ export function getPipelineContext(): AzureDevOpsContext | null {
     tl.getVariable('System.PullRequest.PullRequestId') || '0',
     10
   );
-
+if (!prId) {
+    return null;
+  }
   if (!prId) {
     return null;
   }
