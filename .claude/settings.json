@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(git stash)",
-      "Bash(git stash pop)"
+      "Bash(git stash pop)",
+      "Bash(ssh -T git@github.com)",
+      "Bash(ssh -vT git@github.com)"
     ]
   }
 }
