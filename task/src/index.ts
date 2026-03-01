@@ -20,7 +20,6 @@ import {
   getFileDiff,
   postPRComment,
   postFileComment,
-  deleteExistingComments,
   addLabel,
   getLinkedWorkItems,
   getWorkItemDetails,
@@ -64,7 +63,8 @@ async function run(): Promise<void> {
     const failOnError = tl.getBoolInput('failOnError', false);
     const postComment = tl.getBoolInput('postComment', false);
     const perFileReview = tl.getBoolInput('perFileReview', false);
-    const teamsWebhookUrl = tl.getInput('teamsWebhookUrl', false) || '';
+    const teamsWebhookUrlRaw = tl.getInput('teamsWebhookUrl', false) || '';
+    const teamsWebhookUrl = teamsWebhookUrlRaw.startsWith('http') ? teamsWebhookUrlRaw : '';
 
     const prompt = getPrompt(reviewLanguage);
 
@@ -364,11 +364,7 @@ async function runPerFileReview(
     return;
   }
 
-  // 6. Limpar reviews anteriores
-  console.log('🗑️ Limpando reviews anteriores...');
-  await deleteExistingComments(ctx, REVIEW_MARKER);
-
-  // 7. Postar comentários por arquivo com status condicional
+  // 6. Postar comentários por arquivo com status condicional
   console.log('\n💬 Postando reviews por arquivo...');
   let filesWithFeedback = 0;
 
