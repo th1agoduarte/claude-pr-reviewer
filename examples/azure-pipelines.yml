@@ -38,7 +38,7 @@ steps:
     displayName: 'Setup Node.js 20'
 
   # ─── Review com Claude (completo) ─────────────────────────
-  - task: ClaudePRReview@1
+  - task: ClaudePRReview@2
     displayName: '🤖 Claude PR Review'
     inputs:
       # Autenticação
@@ -76,7 +76,7 @@ steps:
 #  Variação: Review global (modo legado, sem per-file)
 # ═══════════════════════════════════════════════════════════
 #
-#  - task: ClaudePRReview@1
+#  - task: ClaudePRReview@2
 #    displayName: '🤖 Claude PR Review (Global)'
 #    inputs:
 #      authMethod: 'subscription'

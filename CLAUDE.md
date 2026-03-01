@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Azure DevOps Extension that automatically reviews Pull Requests using Claude AI. It runs as a pipeline task (`ClaudePRReview@1`) that collects git diffs, sends them to the Claude Code CLI, and posts review comments back on the PR.
+Azure DevOps Extension that automatically reviews Pull Requests using Claude AI. It runs as a pipeline task (`ClaudePRReview@2`) that collects git diffs, sends them to the Claude Code CLI, and posts review comments back on the PR.
 
 The project is written in **Portuguese (Brazil)** — README, comments, and commit messages follow this convention.
 

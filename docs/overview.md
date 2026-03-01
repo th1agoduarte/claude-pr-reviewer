@@ -47,7 +47,7 @@ steps:
   - checkout: self
     fetchDepth: 0
 
-  - task: ClaudePRReview@1
+  - task: ClaudePRReview@2
     inputs:
       authMethod: 'subscription'
       oauthToken: $(CLAUDE_OAUTH_TOKEN)

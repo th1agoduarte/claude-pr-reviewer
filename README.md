@@ -111,7 +111,7 @@ No Azure DevOps:
 ### Review por arquivo com Teams e Work Items (completo)
 
 ```yaml
-- task: ClaudePRReview@1
+- task: ClaudePRReview@2
   inputs:
     authMethod: 'subscription'
     oauthToken: $(CLAUDE_OAUTH_TOKEN)
@@ -128,7 +128,7 @@ No Azure DevOps:
 ### Review por arquivo (básico)
 
 ```yaml
-- task: ClaudePRReview@1
+- task: ClaudePRReview@2
   inputs:
     authMethod: 'subscription'
     oauthToken: $(CLAUDE_OAUTH_TOKEN)
@@ -142,7 +142,7 @@ No Azure DevOps:
 ### Review global (modo legado)
 
 ```yaml
-- task: ClaudePRReview@1
+- task: ClaudePRReview@2
   inputs:
     authMethod: 'subscription'
     oauthToken: $(CLAUDE_OAUTH_TOKEN)
