@@ -75,6 +75,24 @@ function createClient(ctx: AzureDevOpsContext): AxiosInstance {
 }
 
 /**
+ * Configura credencial git usando o System.AccessToken do pipeline.
+ * Necessário para que git fetch funcione no agente.
+ */
+function configureGitAuth(accessToken: string): void {
+  const orgUrl = tl.getVariable('System.CollectionUri') || '';
+  if (!orgUrl || !accessToken) return;
+
+  try {
+    const base64Token = Buffer.from(`:${accessToken}`).toString('base64');
+    const header = `AUTHORIZATION: Basic ${base64Token}`;
+    tl.execSync('git', `config http.extraheader "${header}"`);
+    tl.debug('Git auth configurado via extraheader.');
+  } catch {
+    tl.debug('Não foi possível configurar git auth.');
+  }
+}
+
+/**
  * Obtém os arquivos alterados na PR via git diff local.
  * Mais confiável e rápido que chamar a REST API.
  */
@@ -82,7 +100,8 @@ export function getLocalDiff(
   targetBranch: string,
   fileExtensions: string[],
   excludePaths: string[],
-  maxSize: number
+  maxSize: number,
+  accessToken?: string
 ): string {
   // Monta o filtro de extensões para o git diff
   const extPatterns = fileExtensions.map((ext) => `'*.${ext.trim()}'`).join(' ');
@@ -96,6 +115,11 @@ export function getLocalDiff(
   let target = targetBranch;
   if (target.startsWith('refs/heads/')) {
     target = target.replace('refs/heads/', '');
+  }
+
+  // Configura autenticação git para o fetch
+  if (accessToken) {
+    configureGitAuth(accessToken);
   }
 
   try {

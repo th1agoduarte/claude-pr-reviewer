@@ -63,7 +63,7 @@ async function run(): Promise<void> {
 
     // ─── 3. Coletar diff ────────────────────────────────────
     console.log('📂 Coletando diff dos arquivos alterados...');
-    let diff = getLocalDiff(ctx.targetBranch, fileExtensions, excludePaths, maxDiffSize);
+    let diff = getLocalDiff(ctx.targetBranch, fileExtensions, excludePaths, maxDiffSize, ctx.accessToken);
 
     if (!diff || diff.trim().length === 0) {
       console.log(prompt.noChanges);
