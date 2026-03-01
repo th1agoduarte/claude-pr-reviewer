@@ -108,8 +108,6 @@ Veja mais exemplos em `examples/azure-pipelines.yml`.
 - **Prompt**: Use `customPrompt` para regras específicas do time
 - **Modelo**: Sonnet (equilíbrio), Opus (melhor qualidade), Haiku (mais rápido)
 
-password:1234789
-
 ## 📝 Licença
 
 MIT
