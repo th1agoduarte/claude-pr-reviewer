@@ -1,0 +1,57 @@
+{
+  "manifestVersion": 1,
+  "id": "ClaudeCodeReviewBySubscriptonTokem",
+  "publisher": "ClaudeCodeReviewBySubscriptionToken",
+  "version": "1.0.0",
+  "name": "Claude Code Review By Subscription",
+  "description": "Análise automática de Pull Requests usando Claude AI via subscription (Claude Code CLI). Suporte a múltiplos idiomas e modelos.",
+  "public": false,
+  "categories": ["Azure Pipelines"],
+  "tags": [
+    "AI",
+    "Code Review",
+    "Pull Request",
+    "Claude",
+    "Anthropic",
+    "DevOps"
+  ],
+  "targets": [
+    {
+      "id": "Microsoft.VisualStudio.Services"
+    }
+  ],
+  "icons": {
+    "default": "images/icon.png"
+  },
+  "content": {
+    "details": {
+      "path": "docs/overview.md"
+    }
+  },
+  "links": {
+    "repository": {
+      "uri": "https://github.com/th1agoduarte/claude-pr-reviewer"
+    }
+  },
+  "branding": {
+    "color": "rgb(216, 180, 140)",
+    "theme": "light"
+  },
+  "contributions": [
+    {
+      "id": "ClaudeCodeReviewBySubscriptionToken",
+      "type": "ms.vss-distributed-task.task",
+      "targets": [
+        "ms.vss-distributed-task.tasks"
+      ],
+      "properties": {
+        "name": "task"
+      }
+    }
+  ],
+  "files": [
+    {
+      "path": "task"
+    }
+  ]
+}

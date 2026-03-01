@@ -1,0 +1,169 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Microsoft/azure-pipelines-task-lib/master/tasks.schema.json",
+  "id": "f3eeffb7-e197-40d8-be3a-9778381ace06",
+  "name": "ClaudePRReview",
+  "friendlyName": "Claude PR Review",
+  "description": "Analisa Pull Requests automaticamente usando Claude AI (via subscription Claude Code CLI)",
+  "helpMarkDown": "[Documentação](https://github.com/your-org/claude-pr-reviewer)",
+  "category": "Utility",
+  "visibility": ["Build"],
+  "runsOn": ["Agent", "DeploymentGroup"],
+  "author": "Your Name",
+  "version": {
+    "Major": 1,
+    "Minor": 0,
+    "Patch": 0
+  },
+  "instanceNameFormat": "Claude PR Review - $(model)",
+  "groups": [
+    {
+      "name": "authentication",
+      "displayName": "Autenticação",
+      "isExpanded": true
+    },
+    {
+      "name": "model",
+      "displayName": "Modelo e Idioma",
+      "isExpanded": true
+    },
+    {
+      "name": "filters",
+      "displayName": "Filtros de Arquivo",
+      "isExpanded": false
+    },
+    {
+      "name": "advanced",
+      "displayName": "Configurações Avançadas",
+      "isExpanded": false
+    }
+  ],
+  "inputs": [
+    {
+      "name": "authMethod",
+      "type": "radio",
+      "label": "Método de autenticação",
+      "required": true,
+      "defaultValue": "subscription",
+      "helpMarkDown": "Escolha entre usar a subscription do Claude (OAuth token) ou uma API key separada.",
+      "options": {
+        "subscription": "Subscription (Claude Code OAuth Token)",
+        "apikey": "API Key (Anthropic Console)"
+      },
+      "groupName": "authentication"
+    },
+    {
+      "name": "oauthToken",
+      "type": "string",
+      "label": "Claude Code OAuth Token",
+      "required": false,
+      "helpMarkDown": "Token gerado via `claude setup-token`. Armazene como variável secreta. Necessário quando authMethod = subscription.",
+      "visibleRule": "authMethod = subscription",
+      "groupName": "authentication"
+    },
+    {
+      "name": "apiKey",
+      "type": "string",
+      "label": "Anthropic API Key",
+      "required": false,
+      "helpMarkDown": "Chave da API do Anthropic Console. Armazene como variável secreta.",
+      "visibleRule": "authMethod = apikey",
+      "groupName": "authentication"
+    },
+    {
+      "name": "model",
+      "type": "pickList",
+      "label": "Modelo Claude",
+      "required": false,
+      "defaultValue": "claude-sonnet-4-5-20250929",
+      "helpMarkDown": "Modelo a ser usado na análise. Sonnet oferece bom equilíbrio custo/qualidade. Opus é o mais avançado. Haiku é o mais rápido e econômico.",
+      "options": {
+        "claude-sonnet-4-5-20250929": "Claude Sonnet 4.5 (recomendado)",
+        "claude-opus-4-6": "Claude Opus 4.6 (mais avançado)",
+        "claude-haiku-4-5-20251001": "Claude Haiku 4.5 (mais rápido/econômico)"
+      },
+      "groupName": "model"
+    },
+    {
+      "name": "reviewLanguage",
+      "type": "pickList",
+      "label": "Idioma do review",
+      "required": false,
+      "defaultValue": "pt-br",
+      "helpMarkDown": "Idioma em que o review será escrito.",
+      "options": {
+        "pt-br": "Português (Brasil)",
+        "en": "English",
+        "es": "Español"
+      },
+      "groupName": "model"
+    },
+    {
+      "name": "fileExtensions",
+      "type": "string",
+      "label": "Extensões de arquivo",
+      "required": false,
+      "defaultValue": "ts,js,tsx,jsx,py,php,vue,cs,java,go,rb,rs,kt,swift,cpp,c,h",
+      "helpMarkDown": "Lista de extensões de arquivo separadas por vírgula. Apenas arquivos com estas extensões serão analisados.",
+      "groupName": "filters"
+    },
+    {
+      "name": "excludePaths",
+      "type": "string",
+      "label": "Caminhos a excluir",
+      "required": false,
+      "defaultValue": "node_modules,dist,build,vendor,.next,__pycache__",
+      "helpMarkDown": "Caminhos a excluir da análise, separados por vírgula.",
+      "groupName": "filters"
+    },
+    {
+      "name": "maxDiffSize",
+      "type": "string",
+      "label": "Tamanho máximo do diff (caracteres)",
+      "required": false,
+      "defaultValue": "30000",
+      "helpMarkDown": "Tamanho máximo do diff a enviar para análise. Diffs maiores serão truncados.",
+      "groupName": "filters"
+    },
+    {
+      "name": "customPrompt",
+      "type": "multiLine",
+      "label": "Prompt adicional (opcional)",
+      "required": false,
+      "defaultValue": "",
+      "helpMarkDown": "Instruções adicionais para o review. Ex: 'Preste atenção especial em SQL injection' ou 'Verifique conformidade com nosso style guide'.",
+      "groupName": "advanced"
+    },
+    {
+      "name": "maxTurns",
+      "type": "string",
+      "label": "Max turns",
+      "required": false,
+      "defaultValue": "1",
+      "helpMarkDown": "Número máximo de turnos do Claude Code. 1 é suficiente para reviews simples.",
+      "groupName": "advanced"
+    },
+    {
+      "name": "failOnError",
+      "type": "boolean",
+      "label": "Falhar pipeline se o review encontrar erros",
+      "required": false,
+      "defaultValue": "false",
+      "helpMarkDown": "Se habilitado, a task falhará se o Claude Code retornar erro (não falha por issues encontradas no código).",
+      "groupName": "advanced"
+    },
+    {
+      "name": "postComment",
+      "type": "boolean",
+      "label": "Postar comentário na PR",
+      "required": false,
+      "defaultValue": "true",
+      "helpMarkDown": "Se habilitado, o review será postado como comentário na Pull Request.",
+      "groupName": "advanced"
+    }
+  ],
+  "execution": {
+    "Node20_1": {
+      "target": "dist/index.js"
+    }
+  }
+}

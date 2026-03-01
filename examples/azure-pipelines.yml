@@ -1,0 +1,81 @@
+# ═══════════════════════════════════════════════════════════
+#  Exemplo: Pipeline Azure DevOps com Claude PR Reviewer
+# ═══════════════════════════════════════════════════════════
+#
+#  Pré-requisitos:
+#    1. Extensão "Claude PR Reviewer" instalada na org
+#    2. Variável secreta CLAUDE_OAUTH_TOKEN configurada
+#       (gere com: claude setup-token)
+#    3. Pipeline Settings → "Allow scripts to access the OAuth token"
+#    4. Build Service com permissão "Contribute to pull requests"
+#
+# ═══════════════════════════════════════════════════════════
+
+trigger: none
+
+pr:
+  branches:
+    include:
+      - main
+      - develop
+      - 'release/*'
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  - group: 'claude-secrets'  # Variable group com CLAUDE_OAUTH_TOKEN
+
+steps:
+  # Checkout com histórico completo (necessário pro diff)
+  - checkout: self
+    fetchDepth: 0
+
+  # Setup Node.js (necessário para Claude Code CLI)
+  - task: NodeTool@0
+    inputs:
+      versionSpec: '20.x'
+    displayName: 'Setup Node.js 20'
+
+  # ─── Review com Claude ─────────────────────────────────
+  - task: ClaudePRReview@1
+    displayName: '🤖 Claude PR Review'
+    inputs:
+      # Autenticação
+      authMethod: 'subscription'
+      oauthToken: $(CLAUDE_OAUTH_TOKEN)
+
+      # Modelo e idioma
+      model: 'claude-sonnet-4-5-20250929'
+      reviewLanguage: 'pt-br'
+
+      # Filtros
+      fileExtensions: 'ts,js,tsx,jsx,py,php,vue,cs,java,go'
+      excludePaths: 'node_modules,dist,build,vendor,.next,__pycache__,*.test.*,*.spec.*'
+      maxDiffSize: '30000'
+
+      # Avançado
+      customPrompt: |
+        Regras adicionais do nosso time:
+        - Seguimos o padrão Clean Architecture
+        - Todos os endpoints devem ter tratamento de erro
+        - Variáveis de ambiente não devem ser hardcoded
+        - Preferimos composição sobre herança
+      postComment: true
+      failOnError: false
+    env:
+      SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
+
+# ═══════════════════════════════════════════════════════════
+#  Variação: Review apenas para PRs grandes (> 10 arquivos)
+# ═══════════════════════════════════════════════════════════
+#
+#  - script: |
+#      FILE_COUNT=$(git diff origin/$(System.PullRequest.TargetBranch)...HEAD --name-only | wc -l)
+#      echo "##vso[task.setvariable variable=fileCount]$FILE_COUNT"
+#    displayName: 'Count changed files'
+#
+#  - task: ClaudePRReview@1
+#    condition: and(succeeded(), gt(variables.fileCount, 10))
+#    ...
