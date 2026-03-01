@@ -124,15 +124,15 @@ export function getLocalDiff(
   }
 
   try {
-    const diffCmdStr = diffArgs.join(' ');
-    tl.debug(`Executando: git ${diffCmdStr}`);
+    tl.debug(`Executando: git ${diffArgs.join(' ')}`);
 
-    const result = tl.execSync('git', diffCmdStr);
+    const result = tl.execSync('git', diffArgs);
     let diff = result.stdout || '';
 
     if (diff.length > maxSize) {
-      tl.warning(`Diff truncado de ${diff.length} para ${maxSize} caracteres.`);
+      const originalSize = diff.length;
       diff = diff.substring(0, maxSize);
+      tl.warning(`Diff truncado de ${originalSize} para ${maxSize} caracteres.`);
     }
 
     return diff;
@@ -212,7 +212,7 @@ export function getChangedFiles(
   }
 
   try {
-    const result = tl.execSync('git', args.join(' '));
+    const result = tl.execSync('git', args);
     const files = (result.stdout || '')
       .split('\n')
       .map((f) => f.trim())
@@ -244,12 +244,13 @@ export function getFileDiff(
   ];
 
   try {
-    const result = tl.execSync('git', args.join(' '));
+    const result = tl.execSync('git', args);
     let diff = result.stdout || '';
 
     if (maxSize > 0 && diff.length > maxSize) {
-      tl.warning(`Diff de ${filePath} truncado de ${diff.length} para ${maxSize} caracteres.`);
+      const originalSize = diff.length;
       diff = diff.substring(0, maxSize);
+      tl.warning(`Diff de ${filePath} truncado de ${originalSize} para ${maxSize} caracteres.`);
     }
 
     return diff;
@@ -280,7 +281,7 @@ export async function postFileComment(
       },
     ],
     threadContext: {
-      filePath: `/${filePath}`,
+      filePath: filePath.startsWith('/') ? filePath : `/${filePath}`,
     },
     status, // 1=Active, 4=Closed
   };
@@ -294,44 +295,6 @@ export async function postFileComment(
     const status = err.response?.status;
     const msg = err.response?.data?.message || err.message;
     tl.warning(`Erro ao postar comentário em ${filePath} (HTTP ${status}): ${msg}`);
-  }
-}
-
-/**
- * Deleta threads de review anteriores identificadas pelo marcador HTML.
- */
-export async function deleteExistingComments(
-  ctx: AzureDevOpsContext,
-  marker: string
-): Promise<void> {
-  const client = createClient(ctx);
-  const url = `/git/repositories/${ctx.repoId}/pullRequests/${ctx.prId}/threads`;
-
-  try {
-    const response = await client.get(url);
-    const threads = response.data?.value || [];
-
-    let deleted = 0;
-    for (const thread of threads) {
-      const firstComment = thread.comments?.[0];
-      if (firstComment?.content?.includes(marker)) {
-        try {
-          // Deleta todos os comentários da thread
-          for (const comment of thread.comments) {
-            await client.delete(`${url}/${thread.id}/comments/${comment.id}`);
-          }
-          deleted++;
-        } catch (err: any) {
-          tl.debug(`Não foi possível deletar thread ${thread.id}: ${err.message}`);
-        }
-      }
-    }
-
-    if (deleted > 0) {
-      console.log(`🗑️ ${deleted} review(s) anterior(es) removido(s).`);
-    }
-  } catch (err: any) {
-    tl.warning(`Aviso: Não foi possível limpar reviews anteriores: ${err.message}`);
   }
 }
 
@@ -396,17 +359,7 @@ export async function getWorkItemDetails(
 ): Promise<WorkItemInfo[]> {
   if (ids.length === 0) return [];
 
-  const client = axios.create({
-    baseURL: `${ctx.orgUrl}/${encodeURIComponent(ctx.project)}/_apis`,
-    headers: {
-      Authorization: `Bearer ${ctx.accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    params: {
-      'api-version': '7.1',
-    },
-  });
-
+  const client = createClient(ctx);
   const idsParam = ids.join(',');
   const fields = 'System.Title,System.Description,Microsoft.VSTS.Common.AcceptanceCriteria';
   const url = `/wit/workitems?ids=${idsParam}&fields=${fields}`;
@@ -446,13 +399,33 @@ export function stripHtml(html: string): string {
 }
 
 /**
+ * Domínios permitidos para webhooks do Teams (Power Automate / Office 365).
+ */
+const ALLOWED_TEAMS_DOMAINS = [
+  '.office.com',
+  '.microsoft.com',
+  '.logic.azure.com',
+  '.azure.com',
+];
+
+/**
  * Envia notificação para o Microsoft Teams via webhook (Adaptive Card).
+ * Valida que a URL pertence a domínios Microsoft para evitar envio acidental de dados.
  */
 export async function sendTeamsNotification(
   webhookUrl: string,
   card: object
 ): Promise<void> {
   try {
+    const urlObj = new URL(webhookUrl);
+    const hostname = urlObj.hostname.toLowerCase();
+    const isAllowed = ALLOWED_TEAMS_DOMAINS.some((d) => hostname.endsWith(d));
+
+    if (!isAllowed) {
+      tl.warning(`Aviso: URL do webhook Teams rejeitada — domínio "${hostname}" não é um domínio Microsoft permitido.`);
+      return;
+    }
+
     await axios.post(webhookUrl, card, {
       headers: { 'Content-Type': 'application/json' },
       timeout: 15_000,
