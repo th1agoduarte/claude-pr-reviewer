@@ -231,6 +231,32 @@ export function parseFileReviews(rawResponse: string): FileReview[] | null {
 }
 
 /**
+ * Valida a estrutura de um array de FileReview parseado do JSON.
+ * Remove objetos inválidos e retorna null se nenhum for válido.
+ */
+export function validateFileReviews(parsed: any[]): FileReview[] | null {
+  const valid = parsed.filter((item) => {
+    if (!item || typeof item !== 'object') return false;
+    if (typeof item.file !== 'string' || !item.file) return false;
+    if (typeof item.summary !== 'string') return false;
+    if (!Array.isArray(item.issues)) return false;
+    if (typeof item.hasFeedback !== 'boolean') return false;
+    return true;
+  });
+
+  if (valid.length === 0) {
+    console.log('⚠️ Nenhum objeto válido encontrado no JSON. Usando fallback global.');
+    return null;
+  }
+
+  if (valid.length < parsed.length) {
+    console.log(`⚠️ ${parsed.length - valid.length} objeto(s) inválido(s) removido(s) do resultado.`);
+  }
+
+  return valid as FileReview[];
+}
+
+/**
  * Converte um FileReview em markdown formatado para postar como comentário.
  */
 export function formatFileReviewAsMarkdown(review: FileReview, marker: string): string {

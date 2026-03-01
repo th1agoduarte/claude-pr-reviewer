@@ -31,6 +31,7 @@ import {
   runReview,
   buildStructuredPrompt,
   parseFileReviews,
+  validateFileReviews,
   formatFileReviewAsMarkdown,
   FileReview,
   ClaudeCodeOptions,
@@ -57,7 +58,8 @@ async function run(): Promise<void> {
       .filter(Boolean);
     const maxDiffSize = parseInt(tl.getInput('maxDiffSize', false) || '50000', 10);
     const maxFileDiffSizeRaw = tl.getInput('maxFileDiffSize', false) || '';
-    const maxFileDiffSize = maxFileDiffSizeRaw ? parseInt(maxFileDiffSizeRaw, 10) : 0; // 0 = sem limite por arquivo
+    const parsedMaxFileDiff = parseInt(maxFileDiffSizeRaw, 10);
+    const maxFileDiffSize = maxFileDiffSizeRaw && !isNaN(parsedMaxFileDiff) ? parsedMaxFileDiff : 0; // 0 = sem limite por arquivo
     const customPrompt = tl.getInput('customPrompt', false) || '';
     const maxTurns = parseInt(tl.getInput('maxTurns', false) || '1', 10);
     const failOnError = tl.getBoolInput('failOnError', false);
@@ -233,7 +235,8 @@ function buildTeamsCard(
 
   facts.push({ title: 'Modelo', value: model });
 
-  const prUrl = `${ctx.orgUrl}/${encodeURIComponent(ctx.project)}/_git/${encodeURIComponent(ctx.repoId)}/pullrequest/${ctx.prId}`;
+  const repoSlug = ctx.repoName || ctx.repoId;
+  const prUrl = `${ctx.orgUrl}/${encodeURIComponent(ctx.project)}/_git/${encodeURIComponent(repoSlug)}/pullrequest/${ctx.prId}`;
 
   return {
     type: 'message',
@@ -304,9 +307,12 @@ async function runPerFileReview(
   const fileDiffs = new Map<string, string>();
   let totalSize = 0;
 
+  let filesIgnored = 0;
+
   for (const file of files) {
     if (totalSize >= maxDiffSize) {
-      console.log(`⚠️ Limite total de diff atingido (${maxDiffSize} chars). Arquivos restantes ignorados.`);
+      filesIgnored = files.length - fileDiffs.size;
+      console.log(`⚠️ Limite total de diff atingido (${maxDiffSize} chars). ${filesIgnored} arquivo(s) restante(s) ignorado(s).`);
       break;
     }
 
@@ -336,8 +342,9 @@ async function runPerFileReview(
   // Salva o review como variável de saída
   tl.setVariable('ClaudeReviewOutput', rawReview, false, true);
 
-  // 5. Parsear resposta JSON
-  const fileReviews = parseFileReviews(rawReview);
+  // 5. Parsear e validar resposta JSON
+  const parsedReviews = parseFileReviews(rawReview);
+  const fileReviews = parsedReviews ? validateFileReviews(parsedReviews) : null;
 
   if (!fileReviews) {
     // Fallback: postar como comentário global

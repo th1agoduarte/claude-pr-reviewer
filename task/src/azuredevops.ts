@@ -9,6 +9,7 @@ export interface AzureDevOpsContext {
   orgUrl: string;
   project: string;
   repoId: string;
+  repoName: string;
   prId: number;
   sourceBranch: string;
   targetBranch: string;
@@ -31,6 +32,7 @@ export function getPipelineContext(): AzureDevOpsContext | null {
   const orgUrl = tl.getVariable('System.CollectionUri') || '';
   const project = tl.getVariable('System.TeamProject') || '';
   const repoId = tl.getVariable('Build.Repository.ID') || '';
+  const repoName = tl.getVariable('Build.Repository.Name') || '';
   const sourceBranch =
     tl.getVariable('System.PullRequest.SourceBranch') || '';
   const targetBranch =
@@ -48,6 +50,7 @@ export function getPipelineContext(): AzureDevOpsContext | null {
     orgUrl: orgUrl.replace(/\/$/, ''),
     project,
     repoId,
+    repoName,
     prId,
     sourceBranch,
     targetBranch,
