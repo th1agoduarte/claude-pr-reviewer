@@ -13,7 +13,6 @@ export interface ReviewPrompt {
   errorMessage: string;
   fileReviewHeader: string;
   noFeedbackFile: string;
-  specificationRule: string;
 }
 
 const prompts: Record<string, ReviewPrompt> = {
@@ -104,8 +103,15 @@ Regras gerais:
 - Verifique TODOS os arquivos (incluindo .md, .json, .yml) em busca de dados sensíveis
 - O campo "line" é opcional mas recomendado quando possível
 - Seja objetivo e construtivo nas descrições
-- Uma seção "ESPECIFICAÇÃO (Work Items)" será fornecida com título, descrição e critérios de aceite dos Work Items linkados. Valide se o código atende à especificação e preencha "meetsSpecification" (boolean) e "specificationNotes" (string com observações)
-- Se meetsSpecification for false, adicione um issue com severity "important" descrevendo o que não foi atendido`,
+
+Validação de Especificação (OBRIGATÓRIA quando a seção "ESPECIFICAÇÃO (Work Items)" estiver presente):
+Uma seção "ESPECIFICAÇÃO (Work Items)" será fornecida abaixo com título, descrição e critérios de aceite dos Work Items linkados a esta PR. Você DEVE:
+1. Comparar as mudanças de CADA arquivo com a especificação fornecida
+2. Verificar se a implementação atende aos requisitos descritos na descrição e critérios de aceite
+3. Preencher "meetsSpecification" como true se o arquivo contribui corretamente para atender a especificação, ou false se há lacunas
+4. Preencher "specificationNotes" com uma explicação concreta: o que foi atendido, o que ficou faltando, ou quais critérios de aceite não foram cobertos
+5. Se meetsSpecification for false, adicionar obrigatoriamente um issue com severity "important" descrevendo especificamente qual requisito ou critério de aceite não foi implementado
+6. Arquivos que não se relacionam com a especificação (ex: configs, docs) devem ter meetsSpecification como true e specificationNotes vazio`,
 
     noChanges: '✅ Nenhum arquivo de código encontrado para analisar nesta PR.',
     diffTooLarge: '⚠️ Diff truncado por exceder o tamanho máximo configurado.',
@@ -115,7 +121,6 @@ Regras gerais:
     errorMessage: '❌ Erro ao executar o review automático. Verifique os logs do pipeline.',
     fileReviewHeader: '### 🤖 Claude Review',
     noFeedbackFile: 'Nenhum problema encontrado neste arquivo.',
-    specificationRule: 'Valide se as mudanças atendem à especificação dos Work Items linkados. Preencha "meetsSpecification" (boolean) e "specificationNotes" (string) em cada item do JSON.',
   },
 
   en: {
@@ -205,8 +210,15 @@ General rules:
 - Check ALL files (including .md, .json, .yml) for sensitive data
 - The "line" field is optional but recommended when possible
 - Be objective and constructive in descriptions
-- A "SPECIFICATION (Work Items)" section will be provided with title, description and acceptance criteria of linked Work Items. Validate if the code meets the specification and fill "meetsSpecification" (boolean) and "specificationNotes" (string with observations)
-- If meetsSpecification is false, add an issue with severity "important" describing what was not met`,
+
+Specification Validation (MANDATORY when "SPECIFICATION (Work Items)" section is present):
+A "SPECIFICATION (Work Items)" section will be provided below with title, description and acceptance criteria of linked Work Items. You MUST:
+1. Compare EACH file's changes against the provided specification
+2. Verify if the implementation meets the requirements described in the description and acceptance criteria
+3. Set "meetsSpecification" to true if the file correctly contributes to meeting the specification, or false if there are gaps
+4. Fill "specificationNotes" with a concrete explanation: what was met, what is missing, or which acceptance criteria were not covered
+5. If meetsSpecification is false, you MUST add an issue with severity "important" describing specifically which requirement or acceptance criterion was not implemented
+6. Files unrelated to the specification (e.g., configs, docs) should have meetsSpecification set to true and specificationNotes as empty string`,
 
     noChanges: '✅ No code files found to analyze in this PR.',
     diffTooLarge: '⚠️ Diff truncated due to exceeding the configured maximum size.',
@@ -216,7 +228,6 @@ General rules:
     errorMessage: '❌ Error running automated review. Check pipeline logs.',
     fileReviewHeader: '### 🤖 Claude Review',
     noFeedbackFile: 'No issues found in this file.',
-    specificationRule: 'Validate if the changes meet the specification of linked Work Items. Fill "meetsSpecification" (boolean) and "specificationNotes" (string) in each JSON item.',
   },
 
   es: {
@@ -306,8 +317,15 @@ Reglas generales:
 - Verifica TODOS los archivos (incluyendo .md, .json, .yml) en busca de datos sensibles
 - El campo "line" es opcional pero recomendado cuando sea posible
 - Sé objetivo y constructivo en las descripciones
-- Una sección "ESPECIFICACIÓN (Work Items)" será proporcionada con título, descripción y criterios de aceptación de los Work Items vinculados. Valida si el código cumple la especificación y llena "meetsSpecification" (boolean) y "specificationNotes" (string con observaciones)
-- Si meetsSpecification es false, agrega un issue con severity "important" describiendo lo que no se cumplió`,
+
+Validación de Especificación (OBLIGATORIA cuando la sección "ESPECIFICACIÓN (Work Items)" esté presente):
+Una sección "ESPECIFICACIÓN (Work Items)" será proporcionada abajo con título, descripción y criterios de aceptación de los Work Items vinculados. DEBES:
+1. Comparar los cambios de CADA archivo con la especificación proporcionada
+2. Verificar si la implementación cumple los requisitos descritos en la descripción y criterios de aceptación
+3. Definir "meetsSpecification" como true si el archivo contribuye correctamente a cumplir la especificación, o false si hay vacíos
+4. Llenar "specificationNotes" con una explicación concreta: qué se cumplió, qué falta, o qué criterios de aceptación no fueron cubiertos
+5. Si meetsSpecification es false, agregar obligatoriamente un issue con severity "important" describiendo específicamente qué requisito o criterio de aceptación no fue implementado
+6. Archivos no relacionados con la especificación (ej: configs, docs) deben tener meetsSpecification como true y specificationNotes vacío`,
 
     noChanges: '✅ No se encontraron archivos de código para analizar en este PR.',
     diffTooLarge: '⚠️ Diff truncado por exceder el tamaño máximo configurado.',
@@ -317,7 +335,6 @@ Reglas generales:
     errorMessage: '❌ Error al ejecutar la revisión automática. Verifique los logs del pipeline.',
     fileReviewHeader: '### 🤖 Claude Review',
     noFeedbackFile: 'No se encontraron problemas en este archivo.',
-    specificationRule: 'Valida si los cambios cumplen la especificación de los Work Items vinculados. Llena "meetsSpecification" (boolean) y "specificationNotes" (string) en cada item del JSON.',
   },
 };
 

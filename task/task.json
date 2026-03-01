@@ -8,11 +8,11 @@
   "category": "Utility",
   "visibility": ["Build"],
   "runsOn": ["Agent", "DeploymentGroup"],
-  "author": "Your Name",
+  "author": "Thiago Duarte",
   "version": {
     "Major": 2,
     "Minor": 0,
-    "Patch": 3
+    "Patch": 6
   },
   "instanceNameFormat": "Claude PR Review - $(model)",
   "groups": [

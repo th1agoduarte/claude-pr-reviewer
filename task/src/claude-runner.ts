@@ -257,5 +257,11 @@ export function formatFileReviewAsMarkdown(review: FileReview, marker: string): 
     md += `**Pontos positivos:** ${review.positives}\n`;
   }
 
+  if (review.meetsSpecification === false && review.specificationNotes) {
+    md += `\n⚠️ **Especificação não atendida:** ${review.specificationNotes}\n`;
+  } else if (review.meetsSpecification === true && review.specificationNotes) {
+    md += `\n✅ **Especificação:** ${review.specificationNotes}\n`;
+  }
+
   return md;
 }
