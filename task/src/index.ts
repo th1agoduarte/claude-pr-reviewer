@@ -57,7 +57,8 @@ async function run(): Promise<void> {
       .map((e) => e.trim())
       .filter(Boolean);
     const maxDiffSize = parseInt(tl.getInput('maxDiffSize', false) || '50000', 10);
-    const maxFileDiffSize = parseInt(tl.getInput('maxFileDiffSize', false) || '10000', 10);
+    const maxFileDiffSizeRaw = tl.getInput('maxFileDiffSize', false) || '';
+    const maxFileDiffSize = maxFileDiffSizeRaw ? parseInt(maxFileDiffSizeRaw, 10) : 0; // 0 = sem limite por arquivo
     const customPrompt = tl.getInput('customPrompt', false) || '';
     const maxTurns = parseInt(tl.getInput('maxTurns', false) || '1', 10);
     const failOnError = tl.getBoolInput('failOnError', false);
@@ -77,7 +78,7 @@ async function run(): Promise<void> {
     console.log(`  Extensões:    ${fileExtensions.join(', ')}`);
     console.log(`  Max diff:     ${maxDiffSize} chars`);
     if (perFileReview) {
-      console.log(`  Max/arquivo:  ${maxFileDiffSize} chars`);
+      console.log(`  Max/arquivo:  ${maxFileDiffSize > 0 ? maxFileDiffSize + ' chars' : 'sem limite'}`);
     }
     if (teamsWebhookUrl) {
       console.log('  Teams:        Habilitado');

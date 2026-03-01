@@ -247,7 +247,7 @@ export function getFileDiff(
     const result = tl.execSync('git', args.join(' '));
     let diff = result.stdout || '';
 
-    if (diff.length > maxSize) {
+    if (maxSize > 0 && diff.length > maxSize) {
       tl.warning(`Diff de ${filePath} truncado de ${diff.length} para ${maxSize} caracteres.`);
       diff = diff.substring(0, maxSize);
     }

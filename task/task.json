@@ -12,7 +12,7 @@
   "version": {
     "Major": 2,
     "Minor": 0,
-    "Patch": 0
+    "Patch": 1
   },
   "instanceNameFormat": "Claude PR Review - $(model)",
   "groups": [
@@ -174,8 +174,8 @@
       "type": "string",
       "label": "Tamanho máximo do diff por arquivo (caracteres)",
       "required": false,
-      "defaultValue": "10000",
-      "helpMarkDown": "Tamanho máximo do diff de cada arquivo individual. Usado quando 'Review por arquivo' está habilitado.",
+      "defaultValue": "",
+      "helpMarkDown": "Tamanho máximo do diff de cada arquivo individual (em caracteres). Se vazio, não limita o diff por arquivo (respeitando apenas o limite total). Usado quando 'Review por arquivo' está habilitado.",
       "groupName": "filters"
     },
     {
