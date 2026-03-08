@@ -12,7 +12,7 @@
   "version": {
     "Major": 2,
     "Minor": 0,
-    "Patch": 11
+    "Patch": 12
   },
   "instanceNameFormat": "Claude PR Review - $(model)",
   "groups": [
@@ -177,6 +177,15 @@
       "defaultValue": "",
       "helpMarkDown": "Tamanho máximo do diff de cada arquivo individual (em caracteres). Se vazio, não limita o diff por arquivo (respeitando apenas o limite total). Usado quando 'Review por arquivo' está habilitado.",
       "groupName": "filters"
+    },
+    {
+      "name": "azureDevOpsPat",
+      "type": "string",
+      "label": "Azure DevOps PAT (opcional)",
+      "required": false,
+      "defaultValue": "",
+      "helpMarkDown": "Personal Access Token para autenticação na API do Azure DevOps. Use quando o Build Service não tem permissão 'Contribute to pull requests'. Armazene como variável secreta.",
+      "groupName": "authentication"
     },
     {
       "name": "teamsWebhookUrl",

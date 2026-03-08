@@ -65,6 +65,8 @@ steps:
 - **Pipeline Settings** → Habilite "Allow scripts to access the OAuth token"
 - **Project Settings → Repos → Security** → Permita "Contribute to pull requests" para o Build Service
 
+> **💡 Dica:** Se o Build Service não conseguir postar comentários na PR (erro TF401027), use um **PAT (Personal Access Token)** com escopo `Code → Read & Write`. Veja a seção [Autenticação com PAT](#-autenticação-com-pat-alternativa) abaixo.
+
 ## 📸 Exemplo de Review
 
 ### Modo Per-File (padrão)
@@ -163,6 +165,31 @@ Se a PR tiver Work Items linkados com descrição e/ou critérios de aceite, o C
 | `postComment` | Postar na PR | `true` |
 | `perFileReview` | Comentários por arquivo na aba Files | `true` |
 | `teamsWebhookUrl` | URL do webhook do Teams | (vazio) |
+| `azureDevOpsPat` | PAT para API do Azure DevOps (opcional) | (vazio) |
+
+## 🔑 Autenticação com PAT (alternativa)
+
+Por padrão, a extensão usa o `System.AccessToken` (Build Service) para postar comentários na PR. Se o Build Service não tiver permissão "Contribute to pull requests" (erro **TF401027**), você pode usar um **Personal Access Token (PAT)**:
+
+1. **Gere um PAT** em Azure DevOps → User Settings → Personal Access Tokens
+   - Escopo necessário: **Code → Read & Write**
+2. **Armazene como variável secreta** no Azure DevOps (ex: `AZURE_DEVOPS_PAT` na variable group `claude-secrets`)
+3. **Configure na task**:
+
+```yaml
+- task: ClaudePRReview@2
+  inputs:
+    authMethod: 'subscription'
+    oauthToken: $(CLAUDE_OAUTH_TOKEN)
+    azureDevOpsPat: $(AZURE_DEVOPS_PAT)
+    # ... demais inputs
+```
+
+A ordem de prioridade para autenticação na API do Azure DevOps é:
+1. Input `azureDevOpsPat` (recomendado quando Build Service não tem permissão)
+2. Variável de ambiente `AZURE_DEVOPS_PAT`
+3. Variável de ambiente `SYSTEM_ACCESSTOKEN`
+4. `System.AccessToken` (Build Service — padrão)
 
 ## 🔐 Segurança
 

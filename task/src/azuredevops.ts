@@ -14,6 +14,7 @@ export interface AzureDevOpsContext {
   sourceBranch: string;
   targetBranch: string;
   accessToken: string;
+  useBasicAuth: boolean;
 }
 
 /**
@@ -37,7 +38,20 @@ export function getPipelineContext(): AzureDevOpsContext | null {
     tl.getVariable('System.PullRequest.SourceBranch') || '';
   const targetBranch =
     tl.getVariable('System.PullRequest.TargetBranch') || '';
-  const accessToken = tl.getVariable('System.AccessToken') || '';
+  const accessToken =
+    tl.getInput('azureDevOpsPat', false) ||
+    process.env.AZURE_DEVOPS_PAT ||
+    process.env.SYSTEM_ACCESSTOKEN ||
+    tl.getVariable('System.AccessToken') ||
+    '';
+
+  const useBasicAuth = !!(tl.getInput('azureDevOpsPat', false) || process.env.AZURE_DEVOPS_PAT);
+
+  if (useBasicAuth) {
+    console.log('🔑 Usando PAT customizado para autenticação no Azure DevOps.');
+  } else {
+    console.log('🔑 Usando System.AccessToken (Build Service) para autenticação no Azure DevOps.');
+  }
 
   if (!orgUrl || !project || !repoId || !accessToken) {
     tl.warning(
@@ -55,14 +69,19 @@ export function getPipelineContext(): AzureDevOpsContext | null {
     sourceBranch,
     targetBranch,
     accessToken,
+    useBasicAuth,
   };
 }
 
 function createClient(ctx: AzureDevOpsContext): AxiosInstance {
+  const authHeader = ctx.useBasicAuth
+    ? `Basic ${Buffer.from(`:${ctx.accessToken}`).toString('base64')}`
+    : `Bearer ${ctx.accessToken}`;
+
   return axios.create({
     baseURL: `${ctx.orgUrl}/${encodeURIComponent(ctx.project)}/_apis`,
     headers: {
-      Authorization: `Bearer ${ctx.accessToken}`,
+      Authorization: authHeader,
       'Content-Type': 'application/json',
     },
     params: {

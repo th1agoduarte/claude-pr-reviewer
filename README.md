@@ -110,6 +110,8 @@ No Azure DevOps:
 2. **Project Settings → Repos → Security** → Build Service:
    - "Contribute to pull requests" ✅
 
+> **💡 Dica:** Se o Build Service não conseguir postar comentários (erro TF401027), use um PAT. Veja [Autenticação com PAT](#-autenticação-com-pat-para-azure-devops-api).
+
 ## ⚡ Uso no Pipeline
 
 ### Review por arquivo com Teams e Work Items (completo)
@@ -176,6 +178,29 @@ Veja mais exemplos em `examples/azure-pipelines.yml`.
 | `postComment` | Postar na PR | `true` |
 | `perFileReview` | Comentários por arquivo (aba Files) | `true` |
 | `teamsWebhookUrl` | URL do webhook do Teams (Adaptive Card) | (vazio) |
+| `azureDevOpsPat` | PAT para API do Azure DevOps (opcional) | (vazio) |
+
+## 🔑 Autenticação com PAT para Azure DevOps API
+
+Por padrão, a extensão usa o `System.AccessToken` (Build Service) para postar comentários na PR. Se o Build Service não tiver permissão (erro **TF401027**), use um **Personal Access Token (PAT)**:
+
+1. Gere um PAT em **Azure DevOps → User Settings → Personal Access Tokens** com escopo **Code → Read & Write**
+2. Armazene como variável secreta (ex: `AZURE_DEVOPS_PAT` na variable group)
+3. Passe na task:
+
+```yaml
+- task: ClaudePRReview@2
+  inputs:
+    authMethod: 'subscription'
+    oauthToken: $(CLAUDE_OAUTH_TOKEN)
+    azureDevOpsPat: $(AZURE_DEVOPS_PAT)
+```
+
+Ordem de prioridade:
+1. Input `azureDevOpsPat`
+2. Env var `AZURE_DEVOPS_PAT`
+3. Env var `SYSTEM_ACCESSTOKEN`
+4. `System.AccessToken` (Build Service)
 
 ## 📋 Sumário Executivo
 

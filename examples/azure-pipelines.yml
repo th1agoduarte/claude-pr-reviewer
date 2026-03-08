@@ -8,6 +8,7 @@
 #       (gere com: claude setup-token)
 #    3. Pipeline Settings → "Allow scripts to access the OAuth token"
 #    4. Build Service com permissão "Contribute to pull requests"
+#       (ou use azureDevOpsPat com um PAT se o Build Service não tiver permissão)
 #
 # ═══════════════════════════════════════════════════════════
 
@@ -58,6 +59,9 @@ steps:
 
       # Notificação Teams (opcional — se variável não existir, é ignorado)
       teamsWebhookUrl: $(TEAMS_WEBHOOK_URL)
+
+      # PAT para Azure DevOps API (opcional — use se Build Service não tiver permissão)
+      # azureDevOpsPat: $(AZURE_DEVOPS_PAT)
 
       # Avançado
       customPrompt: |
